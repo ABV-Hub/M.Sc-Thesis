@@ -1,0 +1,19 @@
+# Thesis Objectives {-}
+
+Application of Data Analytics and Machine Learning (ML) in petroleum reservoir management have received a lot of attention in recent years, mainly due to the availability of sheer computational resources and recorded big data set. Taking advantage of ML in subsurface modeling for efficient and computationally inexpensive forecast and as well as incorporating ML in the context of decision analysis, this thesis aims to cover the following objectives: 
+
+*Objective 1: Building a Proxy Model*
+
+The thesis aims to utilize the ML models and past data to build the proxy model (less rich model compared to complex, full-physics based model) in order to make decision in a timely manner during the decision making in field development process (decision nodes, in this case, are coordinates of injection wells and injection rate control parameters). The five-spot pattern consisting of 4 injection wells and one producer were considered as the development scenario in this work. The concept of Fast Marching Method (FMM) was utilized to determine the connectivity of any pair point within the heterogeneous reservoir. Further, these connectivities (as well as pore volume of flight) were used as the features of ML model to predict the desired output (Recovery Factor (RF), Net Present Value (NPV)) through training "simulated" data set. Different ML models were tested, and the best one is selected based on predictive capabilities. To generate the output of the field performance, a numerical reservoir simulator was used with some geological realizations in order to capture the uncertainty in the petrophysical parameters of the field. 
+
+*Objective 2: Quantification of the Value of Data Analytics in Field Development Project*
+
+The study as well as cover the concept of Value of Information (VOI) in order to distinguish constructive information gathering than destructive ones. Here, the developed ML model was served as a information in the context of decision making and the aim is to quantify the value of this information. (Note: in this work we consider the geological, petrophysical, production and injection data as a DATA; ML model finds the pattern between these data and desired response (NPV); so that ML model forecast is a INFORMATION in the decision making context). This quantification will be helpful for oil and gas companies to prioritize their investment in data analytics projects based on the potential value that the ML model could add to the decision context.
+
+*Objective 3: Robust Field Development Optimization Using the Proxy Model*
+
+Then, the fast and computationally inexpensive proxy (developed in Chap.2) was used to optimize the well placement and as well as injection rates in the aforementioned field development scenario. Genetic Algorithm (GA) type of Evolutionary Algorithm was used as the algorithm of the optimization while the proxy model provides the response of the field out (NPV) at each optimization iteration.
+
+*Objective 4: Pitfall and Advantages of Data Analytics in Subsurface Modeling*
+
+Finally, the obstacles and opportunities of applying the data analytics and ML in subsurface modeling were discussed. First, the challenges in implementing off-the-shelf solutions (models and framework) from other technical domains (mainly from computer science field) for reservoir production and management were discussed. Then, on the upside, the research maps out the areas and activities that data analytics could significantly help decision maker in subsurface modeling to make a better decision with utilizing the insight from the data.

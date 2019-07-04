@@ -1,0 +1,5 @@
+# {-}
+
+```{r frontpage, echo=TRUE, out.width='80%', fig.asp=1, fig.align='center'}
+knitr::include_graphics("frontpage.png")
+```

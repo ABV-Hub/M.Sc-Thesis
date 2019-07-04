@@ -1,0 +1,38 @@
+--- 
+title: "Decision-Driven Data Analytics for Well Placement Optimization in Field Development Scenario - Powered by Machine Learning"
+subtitle: "M.Sc Thesis"
+author: " Peyman Kor"
+date: "June 2019"
+site: bookdown::bookdown_site
+output: bookdown::gitbook
+documentclass: book
+github-repo: "Peymankor/thesis"
+bibliography: packages.bib
+biblio-style: apalike
+colorlinks: true
+link-citations: yes
+description: "This is a minimal example of using the bookdown package to write a book. The output format for this example is bookdown::gitbook."
+---
+
+# Preface {-}
+
+*Submitted in accordance with the requirements for the degree of Master of Science (M.Sc)*  
+*in Petroleum Engineering*  
+*University of Stavanger, Energy Resources Department*
+
+<br>
+
+```{r logo, echo=FALSE, fig.align='center', fig.asp=.25, out.width='50%'}
+knitr::include_graphics("logo1414.png")
+```
+
+
+<br>
+
+The data, source code and algorithem of this thesis can be found in the author's [Github](https://github.com/Peymankor/thesis). Your feedback and comments will be appreciated and the author could be reached out via [Linkedin](https://www.linkedin.com/in/peyman-kor/), [twitter](https://twitter.com/peyman_kor).
+
+
+This thesis is licensed under [Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+
+

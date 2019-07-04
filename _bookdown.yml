@@ -1,0 +1,6 @@
+rmd_files: ["index.Rmd","02-ack.Rmd","01-abstract.Rmd","01-intro-chap1.Rmd","05-proxyu-chap2.Rmd","06-voiuu-chap3.Rmd","07-op-chap4.Rmd","08-con-chap5.Rmd","09-references.Rmd","10-chap.Rmd"]
+book_filename: "bookdown-Thesis"
+language:
+  ui:
+    chapter_name: "Chapter "
+delete_merged_file: true

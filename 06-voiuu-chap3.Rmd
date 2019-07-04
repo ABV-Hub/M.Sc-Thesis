@@ -1,0 +1,434 @@
+# Value of Data Analytics in Field Development Project (VOI Analysis)
+
+## Background
+
+The concept of Value of Information (VOI) first was used in Oil&Gas industry in making decision related for drilling the reservoir[@grayson1960decisions]. This concept originally comes from Decision Analysis (DA) community . [@schlaifer1959probability] first defined the concept of Value of Information in the context of business decisions. More recently, [@bratvold2009value] provided the overview the application and future recommendation of applying VOI analysis in the oil and gas industry. [@eidsvik2015value] has provided the overview of the use cases of the VOI in the earth science  applications. According to the [@bratvold2009value] any information gathering is concerned with two fundamental uncertainties, 
+
+1. The uncertainties we hope to learn about it,but can not directly observe it
+2. The test result, which we refer to as the observable event
+
+Genteelly, in this discussion (as well in the included codes), we denote the x to the distinction of the interest and y denote the observable distinctions.
+
+The VOI is the defined as the "maximum value the decision maker should pay for additional information gathering regarding to the distinction of interest (x), and is defined as the below,(considering the risk neutral case):
+
+  VOI = EV with additional Information - EV without additional 
+
+
+Here, the EV means the Expected Value of the Decision. For example, for this particular context of decision making (Figure \@ref(fig:decisiontreevoi)), assuming the three outcomes, the Value of Information can be shown mathematically as the Equation 6.2:
+
+```{r decisiontreevoi, echo=FALSE, fig.align='center', fig.cap="Decision Context for the Oil Company (without and with information)", message=FALSE, warning=FALSE, ,fig.align='center'}
+knitr::include_graphics("voiaojie.png")
+```
+
+
+\begin{equation} 
+  VOI = \sum_{j=1}^{N} P(z_{j}).max(\sum_{i=1}^{N} P(x_{i}|z_{j})x_{i},v) - max(\sum_{i=1}^{N} P(x_{i})x_{i},v) 
+  (\#eq:binom51)
+\end{equation}
+
+Where, 
+
+* D_k: denotes alternative k for a decision, 
+* x_i denotes realization i of payoff, 
+* z_j denotes realization j of information signal (a test result), 
+* P(x_i) is the probability of payoff x_i before gathering information z_j (i.e., P(x_i) denotes the prior), 
+* P(x_i|z_j) is the conditional probability of payoff x_i given information signal z_j (i.e., P(x_i|z_j) denotes the posterior), 
+* and P(z_j) is the marginal probability of information signal z_j (i.e., P(z_i) denotes the preposterior).
+
+VOI analysis, helps us in providing the framework to distinguish the constructive than wasteful information gathering process. Considering six dimension of the high-quality decision making (Figure \@ref(fig:sixdimensions)), it could be considered that the ML developed in the previous chapter, work as information with updating our prior belief regarding decision to develop (start drilling) the field or walk away from the development.
+
+```{r sixdimensions, echo=FALSE, fig.align='center', fig.asp=0.75, fig.cap="Six Dimesnions of High-Quality Decision Making", out.width='100%'}
+knitr::include_graphics("sixdimensions.png")
+```
+
+
+
+This decision considering the three possible outcomes Low, Medium, High (In the term of the it's NPV value that again depends on well locations and injection scenarios) can be depicted in the Figure \@ref(fig:simpledec) . In this case  the decision maker has two decision to make, whether to drill or walk away(It was considered the walking away the decisions no cost to the decision maker in this case.)
+
+
+```{r simpledec, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="Simple Decision Tree for the Case of the Making Decision for Drilling 5-Spot Pattern (discussed in chap2) ", out.width='100%'}
+knitr::include_graphics("simpledecision.png")
+```
+
+
+
+
+## High-Resolution Probability Tree Method (HRPT) for VOI Analysis
+
+In this, we will use the High-Resolution Probability Method (HRPT) developed by [@bratvold2014robust]. First, to demonstrate this techniques, we use the HRPT method for one simple decision context with the known analytical solution and then we apply this method in the decision context described in the Figure \@ref(fig:example1). In this example, we suppose that a risk-neutral Oil company is considering drilling a well in an undeveloped area where the outcome (Net Present value) in this case is normally distributed with the mean of the $\mu = 10MM$ and $SD=20MM$, in Dollar.
+
+```{r example1, echo=FALSE, fig.align='center', fig.asp=0.75, fig.cap="Decision Tree for TALL-N Problem (without information) ", message=FALSE, warning=FALSE, out.width='80%'}
+knitr::include_graphics("tallwitoi.png")
+```
+
+
+In the effort to make a better decision, the company considering the acquisition of seismic survey. The expert in the company believes that the seismic results are correlated with true value of the well with the correlation coefficient of $\rho = 0.6$. It is assumed that in this case, the signal (seismic survey) will have a normal distribution with the same mean and standard deviation ,Figure (\@ref(fig:example2). Here the decision makers face three decisions to make,1) Start the Drilling 2) Walk away from the Drilling, 3) Gather the information about the uncertainty of the out put. However, the information gathering has a specific value to could add to the decision, (VOI) that need be analyzed before "Gathering the Information."
+
+
+```{r example2, echo=FALSE, fig.align='center', fig.asp=0.75, fig.cap="Decision Tree for TALLN Problem (with information)", out.width='100%'}
+knitr::include_graphics("tallwithi.png")
+```
+
+Now, considering the prior distribution and signal distribution of this problem (is named TALL-N),  Figure (\@ref(fig:example3)) shows both the prior distribution as well signal.
+
+```{r example3, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="Permeability Distribution of the Field", message=FALSE, warning=FALSE, N=100000, out.width='80%'}
+#install.packages('ggplot2')
+library(ggplot2)
+TAll <- data.frame(NPV=rnorm(1000000,10,20))
+ggplot(TAll, aes(x=NPV)) + 
+  geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+                 binwidth=.5,
+                 colour="black", fill="blue") +
+  ggtitle("TALL_N Problem, \n P(X)  ~ N(10,20), \n P(Z)  ~ N(10,20),\n Correlation_Coefficient = 0.6 ") 
+
+```
+
+
+
+Considering  this information, Now we can use the (HRPT) method to calculate the Value of information (VOI) in this case. It is worth to mention that in this case, we used the the racket and mean method for discritizing the prior as well the signal distribution. In addition, the number of nodes (Nodes) in this case was 1000. Therefore, the the conditional probability will have the dimension of the 1000 in 10000.
+
+```{r priortall1, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Permeability Distribution of the Field, message=FALSE, warning=FALSE, N=100000', out.width='80%'}
+fn_EVII <- function(x_mean,x_sd,z_mean,z_sd,rho,Cost) {
+set.seed(1234)
+N <- 1000         # Number of grid nodes
+rho <- rho          # Correlation Coefficient
+x_mean <- x_mean-Cost    # mean of prior
+x_sd <- x_sd      # standard Deviation Prior
+z_mean <- z_mean-Cost     # standard Deviation signal
+z_sd <- z_sd       # standard Deviation signal
+range <- quantile(rnorm(10^6,x_mean,x_sd),c(0.000001,0.99999))
+xx <- seq(range[[1]],range[[2]],length.out = N+1)
+ss <- seq(range[[1]],range[[2]],length.out = N+1)
+X <- c(rep(0,N))
+S <- c(rep(0,N))
+for (i in 1:N) {
+  X[i] <- (xx[i]+xx[i+1])/2
+}
+
+for (i in 1:N) {
+  S[i] <- (ss[i]+ss[i+1])/2
+}
+# Prior Plot
+z <- S
+x <- X
+
+f_x<- dnorm(x, x_mean,x_sd)
+f_x_N <- f_x/sum(f_x)
+
+# Signal Plot
+f_z <- dnorm(z,z_mean,z_sd)
+f_z_N <- f_z/sum(f_z)
+
+# Liklihood Table
+Lik <- matrix(0,nrow = N,ncol = N)          # Liklihood table, x in columns and z in rows
+
+for (j in 1:N) {
+  mean <- z_mean + (rho*z_sd*(x[j]-x_mean)/x_sd)  
+  sd <- ((1-rho^2)*x_sd^2)^0.5
+  z_di <- dnorm(z, mean,sd)
+  z_di_N <- z_di/sum(z_di)
+  Lik[,j] <- z_di_N
+}
+
+Prepos <- c(rep(0,N))                     # Preposterior Rows
+Pos <- matrix(0,nrow = N,ncol = N)    # Posterior Table
+for (j in 1:N) {
+  Prepos[j] <- sum(Lik[j,]*f_x_N)
+  for (i in 1:N) {
+    Pos[i,j] <- Lik[j,i]*f_x_N[i]/Prepos[j]
+  }
+  Pos[,j] <- Pos[,j]/sum(Pos[,j])
+}
+
+sum <- 0
+for (j in 1:N) {
+  VOI <- Prepos[j]*max(sum(Pos[,j]*x),0)
+  sum <- sum + VOI
+}
+EVII <- sum-max(sum(x*f_x_N),0)
+return(EVII)
+}
+```
+
+Full other related data regarding this VOI case has been depicted in the Table \@ref(tab:resdata3).
+
+```{r resdata3, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+resdata21 <- data.frame(Parameter=c('Mean Prior(x_mean)','Standard Deviation (Prior)','Mean Signal (z_mean)','Standard Deviation Signal (z_sd)','Correlation Coefficient (rho)','Cost'),Value = c(10 ,20,10,20,0.6,0))
+knitr::kable(resdata21, caption = 'Prior and Information System Characteristics in the TALL-N Problem', booktabs=TRUE)
+```
+
+
+
+```{r calculation1, echo=FALSE, message=FALSE, warning=FALSE, tidy=F}
+
+VOI <- fn_EVII(10,20,10,20,0.6,0)
+ss <- matrix(0,nrow = 1,ncol = 2)
+ss[1,1] <- 'Value of Information (VOI) is:'
+ss[1,2] <- VOI
+asa <- data.frame(ss)
+Result <- data.frame(y=VOI)
+colnames(asa) <- c('VOI','')
+knitr::kable(asa, caption = 'The Result of VOI from HRPT Method, N(nodes)=1000', booktabs=TRUE)
+```
+
+On the other hand we know that this TALL_N problem has a analytical solution as the follow:[@sethian1996fast]
+
+\begin{equation} 
+\ EVII =
+  \begin{cases}
+    \rho\sigma[\phi(\rho^{-1})c -\rho^{-1}c\psi(-\rho^{-1}c)]       & \quad \text{if }  , {\mu>v} \\ 
+    \rho\sigma[\phi(\rho^{-1})c +\rho^{-1}c\psi(\rho^{-1}c)]        & \quad \text{if } , {\mu<v}
+  \end{cases}
+    (\#eq:binom56)
+\end{equation} 
+
+Where the, $\mu$ is the mean of the prior; $\sigma$ is the standard deviation of the prior; $v$ is the value of alternative decision-the best decision without gathering more information); $c=(\mu-v)/\sigma$ is known as the "coefficient of the divergence"; $\sigma$ is the standard normal probability density function ; $\psi$ is the standard normal cumulative distribution function, $\rho$ is the positive correlation coefficient between the prior and the observed signal obtained through information system.
+
+Here, the result of HRPT method and as well exact solution were found and the comparison of these two results has been made in the Figure \@ref(fig:compa. The comparison was made to capture also range of the correlation coefficient and gain the number of nodes in discritization method in this case was (nodes=1000). In context of the TAll_N problem, the Table provide the value of the VOI found from the HRDT method, Exact solution and the [@@bratvold2014robust] paper.
+
+```{r compa, echo=FALSE, fig.cap='Comparison of the VOI found in Analytical Solution Vs. HRPT Method', message=FALSE, warning=FALSE}
+library('ggplot2')
+Ana <- read.csv('Ana_VOI.csv',header = F)
+Ana <- abs(Ana)
+Ana[1:6,2] <- 0
+for (i in 1:29) {
+  Ana$EVII[i] <- fn_EVII(10,20,10,20,Ana[i,1],0)
+}
+colnames(Ana) <- c('X1','X2','EVII')
+ggplot(Ana) +
+  geom_line(aes(x=X1,y=X2,color='Analytical Solution')) +
+  geom_point(aes(x=X1,y=EVII,colour='HRPT Method')) +
+  labs(x = "Correlation Coefficient") +
+  labs(y = 'EVII ($MM)') 
+```
+
+
+```{r comdis, eval=FALSE, include=FALSE, tidy=FALSE}
+resdata <- data.frame(HRDT=1.3596, Ec= 1.3596,Rei=1.3586)
+colnames(resdata) <- c('HRPT (N=1000 degrees','Analytical Solution','HRPT_Paper (N=1000 Degrees)')
+knitr::kable(resdata, caption = 'Comparison of the VOI found through HRPT Method', booktabs=TRUE)
+```
+
+
+## Sensitivity Analysis of VOI to Prior, Likelihood and CAPEX 
+
+In VOI discussion, the value of information must be assesd before gathering the information. This provides insight to the decision maker about the maximum value that worth to pay for gathering the data. Here, in the context of the Machine Learning the cost of Information includes the following:
+
+* Data Acquisition
+* Pattern Detection
+* Pattern Recognition 
+* Pattern Exploration
+* Pattern Exploitation
+
+On the other hand, the reliability of the ML model can be evaluated only if after acquisition of data and building the ML model. However, in the concept of VOI, the value of information must be asses **before** gathering the data. Therefore, we make a sensitivity analysis not only on the reliability of the result of data analytics (ML model) but also to the prior and as well CAPEX of the project. It must be mention that in the VOI analysis, the outcome of the event NPV is defined as the follows that includes the CAPEX cost (All the spending cost of the development project before production of the field):
+
+\begin{equation} 
+  NPV=\sum_{k=1}^{n_T} \frac{[q_o^{k}P_o - q_w^k P_w -I^k P_{wi} ]\bigtriangleup t_k}{(1+b)^{t_k/D}} -CAPEX
+      (\#eq:binom57)
+\end{equation}
+
+Now, the discussion above aims to provide the framework to find the VOI in the cases of different scenarios for the following parameters:
+
+* Mean of Prior Distribution
+* Standard Deviation of Prior Distribution
+* CAPEX (Capital Cost)
+* Reliability of the Information
+
+
+Mean of Prior Distribution:
+
+In the work developed in the Chapter 2, we had 5000 total training set. These data-set represents the historical data set for this specific '5-Spot Pattern'. Well, in fact the prior is defined as the *historic data' and 'Expert Knowledge', in this work while we consider the 'Historic data' as the prior, we will have different cases to include the several scenarios of the Prior distribution. To get the hint regarding which range of the prior distribution to be considered in sensitivity analysis, first we have look on the historical data-set of the 5-spot patter. The Figure \@ref(fig:histprior) shows the histogram of the NPV of 'Historical' data-set. The box plot of this distribution was plotted in Figure \@ref(fig:boxx). we can see that the historical data has the shape of the Normal distribution with the mean of 54 MM$ and standard Deviation of the 5.6 MM. 
+
+
+```{r histprior, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Distribution of the Historical NPV', message=FALSE, warning=FALSE, out.width='80%'}
+#install.packages('ggplot2')
+DATANPV <- read.csv('UPDATEDDATA.csv')
+library(ggplot2)
+TAll <- data.frame(NPV=DATANPV[,21])
+ggplot(TAll, aes(x=NPV)) + 
+  geom_histogram(aes(y=..density..),      # Histogram with density instead of count on y-axis
+                 binwidth=.5,
+                 colour="black", fill="blue") 
+
+
+```
+
+
+```{r boxx, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE,fig.cap="Box Plot of Permeability Distribution"}
+#install.packages('ggplot2')
+DATANPV <- read.csv('UPDATEDDATA.csv')
+library(ggplot2)
+datanpv <- data.frame(NPV=DATANPV[,21])
+
+ggplot(datanpv, aes(y=NPV)) + 
+  geom_boxplot(fill = "white", colour = "#3366FF") +
+  scale_y_continuous(name = "Net Present value of Past Data ($$M)")
+```
+
+Now this gives us the idea about the different scenario of the prior we could have in the sensitivity analysis. In this work, we considered 5 different possible cases for prior distribution. As shown in the Figure \@ref(fig:prioranalys), these five distribution were considered as the possible scenarios of the prior (all in $MM):
+
+1. Normal Distribution, $\mu = 30$
+1. Normal Distribution, $\mu = 40$
+1. Normal Distribution, $\mu = 50$
+1. Normal Distribution, $\mu = 60$
+1. Normal Distribution, $\mu = 70$
+
+
+```{r prioranalys, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Range of Prior Distribution in VOI Analysis-Normal Distribution', message=FALSE, warning=FALSE, out.width='100%'}
+
+X <- data.frame(NPV =rnorm(100000,30,5))
+Y <- data.frame(NPV = rnorm(100000,40,5))
+Z <- data.frame(NPV = rnorm(100000,50,5))
+E <- data.frame(NPV = rnorm(100000,60,5))
+ee <- data.frame(NPV = rnorm(100000,70,5))
+
+# Now, combine your two dataframes into one.  
+# First make a new column in each that will be 
+# a variable to identify where they came from later.
+X$type <- 'Mean_PV_Production_Prior = 30'
+Y$type <- 'Mean_PV_Production_Prior = 40'
+Z$type <- 'Mean_PV_Production_Prior = 50'
+E$type <- 'Mean_PV_Production_Prior = 60'
+ee$type <- 'Mean_PV_Production_Prior = 70'
+
+# and combine into your new data frame vegLengths
+vegLengths <- rbind(X,Y,Z,E,ee)
+ggplot(vegLengths, aes(NPV, fill = type)) + geom_density(alpha = 0.2) 
+
+
+```
+
+Standard deviation of Prior Distribution:
+
+However, considering the only different mean values of the prior distribution  is not sufficient. Therefore, in this study we considered the both the change in the mean and as well spread of the data from the mean with considering the 4 different possible standard deviation. Again, as it was discussed in the for the mean analysis, we had the look on the standard deviation of the "Historical data" to get the insight about the range of the standard deviations to be included in the sensitivity analysis. The Standard Deviation of the the past data-set was, $SD=5.6$, then the following were considered for the range of SD values. (Note: Each mean prior, will have 4 different SD values in the analysis, therefore, the total number of the prior distribution are $5*4=20$
+). 
+
+1. Normal Distribution, $sd = 2.5$
+2. Normal Distribution, $sd = 5$
+3. Normal Distribution, $sd = 10$
+4. Normal Distribution, $sd = 15$
+
+The Figure \@ref(fig:standana) shows the 4 different assigned standard deviation at the mean prior distribution of the $\mu = 50$.
+
+```{r standana, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Prior Distribution for Four SD Values at Mean = 50 MM(Dollar)', message=FALSE, warning=FALSE, out.width='100%'}
+
+X <- data.frame(NPV =rnorm(100000,50,2.5))
+Y <- data.frame(NPV = rnorm(100000,50,5))
+Z <- data.frame(NPV = rnorm(100000,50,10))
+E <- data.frame(NPV = rnorm(100000,50,15))
+
+# Now, combine your two dataframes into one.  
+# First make a new column in each that will be 
+# a variable to identify where they came from later.
+X$type <- 'SD_PV_Production_Prior = 2.5'
+Y$type <- 'SD_PV_Production_Prior = 5'
+Z$type <- 'SD_PV_Production_Prior = 10'
+E$type <- 'SD_PV_Production_Prior = 15'
+
+# and combine into your new data frame vegLengths
+vegLengths <- rbind(X,Y,Z,E)
+ggplot(vegLengths, aes(NPV, fill = type)) + geom_density(alpha = 0.2)    
+```
+
+
+
+
+CAPEX:
+
+The evaluation of the CAPEX (Capital Cost before the oil production) must be done through economic expert of the the decisions. Since the NPV defined in this case is all consider the money discount factor, the CAPEX values in this study as well must be expresses in the Net Present Values, that is why we call the CAPEX in the figures as PV_CAPEX Here, We considered the four possible range for the CAPEX in order to capture the range of CAPEX values, these are as follows (in MM$):
+
+1. CAPEX  $PV(Capex) = 30$
+2. CAPEX, $PV(Capex) = 40$
+3. CAPEX, $PV(Capex) = 50$
+4. CAPEX, $PV(Capex) = 60$
+
+The Figures (\@ref(fig:sens1), \@ref(fig:sens2),\@ref(fig:sens3),\@ref(fig:sens4)) show the results of sensitivity analysis of the VOI at different standard deviation of the prior, SD=2.5,5,10,15. For example when we have a normal distribution withe the SD  = 2.5, the decsion context with the following characteristics,:
+
+* Mean of prior distribution: 50 MM (Dollar)
+* Correlation Coefficient: 0.8
+* CAPEX: 50 MM (Dollar);
+
+The VOI for this case is equal to 0.8 MM (Dollar). In addition we can see two different trends:
+
+* The VOI increases with increasing the reliability of the information (Correlation Coefficient)
+* The VOI has the highest value when the CAPEX is equal to the mean of the prior distribution, showing that the VOI is more valuable when it has stronger capability to change our decisions.
+* With increasing standard deviation values, the VOI get more valuable. The main reason that could be attributed is that in the case of high standard deviation, there is more down side in distribution of the prior, so that the reliable information could be more valuable in order to avoid that downside.
+
+```{r sens1, echo=FALSE, fig.asp=1, fig.cap='Sensitivity Analysis of VOI at SD=2.5', message=FALSE, warning=FALSE, out.width='100%'}
+load('VOI_UP23May.RData')
+RVOI <- VOI_DATA_SD_UP[[1]]
+RVOI[1:36,5] <- "Correlation Coefficient = 0.4" 
+RVOI[37:72,5] <- "Correlation Coefficient = 0.5"
+RVOI[73:108,5] <- "Correlation Coefficient = 0.6"
+RVOI[109:144,5] <- "Correlation Coefficient = 0.7"
+RVOI[145:180,5] <- "Correlation Coefficient = 0.8"
+RVOI[181:216,5] <- "Correlation Coefficient = 0.9"
+ggplot(RVOI, aes(Mean_Prior, Cost.CAPEX.)) +
+  geom_point(aes(size=EVII, color=EVII)) +
+  facet_wrap(~ new, nrow = 3) +
+  xlab(label = 'Mean_PV_Production_Prior ($MM)') +
+  ylab(label = 'PV_Capex ($MM)') +
+  ggtitle("SD_Prior = 2.5 $MM") 
+```
+
+
+
+```{r sens2, echo=FALSE, fig.asp=1, fig.cap='Sensitivity Analysis of VOI at SD=5', message=FALSE, warning=FALSE, out.width='100%'}
+load('VOI_UP23May.RData')
+RVOI <- VOI_DATA_SD_UP[[2]]
+RVOI[1:36,5] <- "Correlation Coefficient = 0.4" 
+RVOI[37:72,5] <- "Correlation Coefficient = 0.5"
+RVOI[73:108,5] <- "Correlation Coefficient = 0.6"
+RVOI[109:144,5] <- "Correlation Coefficient = 0.7"
+RVOI[145:180,5] <- "Correlation Coefficient = 0.8"
+RVOI[181:216,5] <- "Correlation Coefficient = 0.9"
+ggplot(RVOI, aes(Mean_Prior, Cost.CAPEX.)) +
+  geom_point(aes(size=EVII, color=EVII)) +
+  facet_wrap(~ new, nrow = 3) +
+  xlab(label = 'Mean_PV_Production_Prior ($MM)') +
+  ylab(label = 'PV_Capex ($MM)') +
+  ggtitle("SD_Prior = 5 $MM") 
+```
+
+
+
+```{r sens3, echo=FALSE, fig.asp=1, fig.cap='Sensitivity Analysis of VOI at SD=10', message=FALSE, warning=FALSE, out.width='100%'}
+load('VOI_UP23May.RData')
+RVOI <- VOI_DATA_SD_UP[[3]]
+RVOI[1:36,5] <- "Correlation Coefficient = 0.4" 
+RVOI[37:72,5] <- "Correlation Coefficient = 0.5"
+RVOI[73:108,5] <- "Correlation Coefficient = 0.6"
+RVOI[109:144,5] <- "Correlation Coefficient = 0.7"
+RVOI[145:180,5] <- "Correlation Coefficient = 0.8"
+RVOI[181:216,5] <- "Correlation Coefficient = 0.9"
+ggplot(RVOI, aes(Mean_Prior, Cost.CAPEX.)) +
+  geom_point(aes(size=EVII, color=EVII)) +
+  facet_wrap(~ new, nrow = 3) +
+  xlab(label = 'Mean_PV_Production_Prior ($MM)') +
+  ylab(label = 'PV_Capex ($MM)') +
+  ggtitle("SD_Prior = 10 $MM") 
+```
+
+
+
+
+```{r sens4, echo=FALSE, fig.asp=1, fig.cap='Sensitivity Analysis of VOI at SD=15', message=FALSE, warning=FALSE, out.width='100%'}
+load('VOI_UP23May.RData')
+RVOI <- VOI_DATA_SD_UP[[4]]
+RVOI[1:36,5] <- "Correlation Coefficient = 0.4" 
+RVOI[37:72,5] <- "Correlation Coefficient = 0.5"
+RVOI[73:108,5] <- "Correlation Coefficient = 0.6"
+RVOI[109:144,5] <- "Correlation Coefficient = 0.7"
+RVOI[145:180,5] <- "Correlation Coefficient = 0.8"
+RVOI[181:216,5] <- "Correlation Coefficient = 0.9"
+ggplot(RVOI, aes(Mean_Prior, Cost.CAPEX.)) +
+  geom_point(aes(size=EVII, color=EVII)) +
+  facet_wrap(~ new, nrow = 3) +
+  xlab(label = 'Mean_PV_Production_Prior ($MM)') +
+  ylab(label = 'PV_Capex ($MM)') +
+  ggtitle("SD_Prior = 15 $MM") 
+```
+
+
+
+

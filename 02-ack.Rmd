@@ -1,0 +1,11 @@
+# Acknowledgment {-}
+
+I would like to express my gratitude to my supervisor, Professor [Reidar B. Bratvold](http://www.uis.no/article.php?articleID=73815) for his guidance and support throughout the tenure of this work. Reidar is an inexhaustible source of critical thinking and a great mentor and I appreciate him giving me the learning opportunity at his research group.
+
+I am also grateful for my co-supervisor, Dr. [Aojie Hong](https://www.uis.no/about-the-university/contact-us/employees/hong-aojie-article89548-11199.html) who enthusiastically supported and encouraged me in the area of Machine Learning. Aojie helped me with insightful discussions and comments and was essential to fulfill this thesis.
+
+I wish to appreciate my friends at our research group at UiS for providing a friendly environment and helpful discussions about different issues during these months. Special thanks go to Amine, Xin, Camillo for giving invaluable comments on my work. I also wish to thank all my friends and especially for my two awesome friends, Jan and Juan for being with me during the master program.  
+
+Last but not least, my master program could not have been completed without unconditional love and support of my family. No words can begin to justify my appreciation for their support and love to me.
+
+

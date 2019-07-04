@@ -1,0 +1,153 @@
+# Robust Field Development Optimization Using the Proxy Model
+
+
+## Introduction
+
+So far, in the chapter 2 we developed a proxy model utilizing machine learning algorithm. In the chapter 3, we discussed the Value of Information in decision making for field development project.  In this chapter the optimization algorithm will be utilized to optimize the field development scenario. This chapter presents a robust ,multidimensional, simultaneous optimization of well locations and controls (injection rate) using a Genetic Algorithm (GA) type of Evolutionary Algorithm (EA). Here, we demonstrate the robust optimization (RO) to the 5-spot pattern. This optimization algorithm is developed to fully take advantage of the computational efficiency and speed of the proxy model. Within a Robust Optimization procedure, the geological uncertainties are included by set of realizations  generated using the geostatistical methods. Then, the objective of RO is to find a control vector (here both injection wells coordinates and water injection scheme) that optimize the expected value (EV) of the objective function (NPV) over the all geological realizations. This workflow of is named RO since optimum control vector is robust to geological uncertainty. [@hong2017robust,@van2009robust]
+
+
+
+## Brief Summary of the Proxy-Model 
+
+We begin with a summary of the approach presented in Chapter 3. As with other machine learning algorithm, the procedure starts with the collection and manipulation of feature and response data. This is achieved by running reservoir simulations using randomly sampled well locations within the domain of interest. It must be noted that special care has been taken to not to avoid inefficient well placement of injectors leading to weak sweep efficiency. The injectors are not only have distance from the producers as well as are in distant place from each other. 
+
+For each training observation, well-to-well connectivities and Pore Volume (PV) of flight are computed between every pair of wells in the reservoir using FMM. Together, these parameters make up the predictor variables that constitute the feature labels used for training.
+Each each training, characterized by a unique well configuration and combination of predictor parameters, is evaluated in a reservoir simulator to obtain a true output. A well known reservoir-wide objective function, net present value (NPV), can then be computed from the simulator output, to comprise the corresponding response observation. Then, the feature and response data are fed into the XGBoost algorithm to create a prediction model. Tuning parameters for the XGBoost algorithm (number of trees, shrinkage factor, bag fraction, and tree depth) are optimized by cross-validation to minimize the mean square error and avoid over-fitting.
+
+## Robust Optimization of Well Placement and Water Injection Scheme 
+
+
+The manner in which the joint problem has been handled in recent studies has varied. [@van2009robust] considered the geological uncertainty in optimization water-flooding using a gradient-based optimization which the gradients are obtained with an adjoint formulation.[@chen2009efficient] proposed a ensemble-based optimization method(EnOpt) which is adjoint-free and gradient is approximated by the co-variance between the control variables and objective function. [@forouzanfar2014joint] conducted a joint optimization in which both the location and injection schemes are handled using gradient projection. [@bellout2012joint]  proposed a hybrid approach where well placement was solved using derivative-free methods based on pattern search while injection rate is solved by adjoint-based method. [@hong2017robust] proposed a Ensemble-based optimization (EnOpt) where the capacitance-resistance model (CRM) was used as a proxy for optimization of injection scheme. [@nwachukwu2018machine] proposed a scheme similar Mesh Adaptive Direct Search (MADS)for joint optimization where Extreme Gradient Boosting method (XGBoost) was build for making forecast for given any set of observations.
+
+In this chapter, we propose a Genetic Algorithm (GA) [@holland1975adaptation,@goldberg1989genetic] as a stochastic search algorithm which are are able to solve optimization of problems of the
+and development of an optimization strategy that efficiently combines the proxy and a reservoir simulator to solve the joint well locations and controls problem in a multidimensional manner.following type:
+
+\begin{equation} 
+  \Theta^{*} \equiv arg max f(\theta) = {\theta^{*} \in \Theta : f(\theta^{*})>f(\theta), \vee\theta \in \Theta }
+    (\#eq:binom101)
+\end{equation}
+
+Where $\Theta$ $\subseteq$ $R$ defines the search spaces, $\theta = (\theta{1},\theta{2},..,\theta{p})$ is domain of parameters where each $\theta{i}$ varies between lower and upper bound. The joint Optimization in this work can be classified as the type of equation above where the $S$ is the search space for (NPV) while the domain of parameters of the problem are defined as well locations and water injection scheme.[@scrucca2013ga]
+
+GA utilize evolutionary strategies inspired by the basic principles of biological adaption. At each stage of the evolution, a population is composed of a number of individuals, also called chromosomes or strings . each chromosomes is made of units (genes, features, characters) which control the inheritance of one or several characters. Genes of specific characters are placed along the chromosome, and the corresponding string positions are called loci. Each genotype would represent a potential solution to a problem. The decision variables, or phenotypes, in a GA are obtained by applying some mapping from the chromosome representation into the decision variable space, which represent potential solutions to an optimization problem. A suitable decoding function may be required for mapping chromosomes onto phenotypes.
+
+
+The genetic algorithm process could be summarized as follow:
+
+1. type of variables, fitness function, GA parameters and convergence criteria must be defined to initiate the GA process,
+2. Initial random population of size n is generated, so for step k = 0 we may write ${\theta_{1}^{0},\theta_{2}^{0},...,\theta_{n}^{0}}$ .
+3. convergence criteria are checked and if it is meet, GA stops.
+3. The fitness of each member of the population at any step k, $f(\theta_{i}^{k})$ is computed and probabilities $p_{i}^{k}$ are assigned to each individual in the population, proportional to their fitness. 
+4. The reproducing population is formed (selection) by drawing with replacement a sample where each individual has probability of surviving equal to $p_{i}^{k}$. 
+5. A new population${\theta_{1}^{k+1},\theta_{2}^{k+2},...,\theta_{n}^{k+1}}$ is formed from the reproducing population using crossover and mutation operators. 
+6. Then, set $k = k + 1$ and the algorithm returns to the fitness evaluation step. When convergence criteria are met the evolution stops, and the algorithm deliver $\theta^{*} \equiv argmax f(\theta_{i}^{k})$ arg max as the optimum. The flow chart of this algorithm is shown in the Figure \@ref(fig:flowop).
+
+```{r flowop, echo=FALSE, fig.align='center', fig.asp=0.75, fig.cap="Flow Chart for Genetic Algorithem Process", out.width='100%'}
+knitr::include_graphics("flowga.png")
+```
+
+## Optimization Process
+
+The proposed methods presented in the preceding sections were applied to a synthetic field under five spot pattern with 4 production wells and 1 injection well. Geological model were built on a 45 × 45 two-dimensional grid measuring 450 m on each side and 10 m in thickness. In order to take the geologic uncertainty into consideration, geological realizations were generated using Sequential Gaussian Simulation (SGS) [@pyrcz2014geostatistical] with the semivariogram parameters given in Table \@ref(tab:semii). 
+
+```{r semii, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+resdata1 <- data.frame(Parameter=c('Nugget Effect','Type','Range','Anistropy ratio',
+'Azimuth'),Value = c('Sill/2, md^2','Spherical','20 (grid cell)',1 ,'0-degree (North)'))
+knitr::kable(resdata1, caption = 'Parameters of Semi variogram to Perform SGS', 
+             booktabs=TRUE)
+```
+
+
+The geological model has the petrophysical uncertainty (in this case permeability) and 50 realizations were considered to capture the uncertainty. 10 realization (out of 50) of permeability of the reservoir has been shown in the Figure \@ref(fig:reall).
+
+```{r reall, echo=FALSE, fig.align='center', fig.asp=1, fig.cap="Twelve Realizations (out of 50) of Permeability in the Geological Model", out.width='100%'}
+knitr::include_graphics("realizations.png")
+```
+
+Considering the Robust Optimization defined in the previous sections, the problem can be stated as the follows:
+*The Optimization algorithem search solution(s) for injection well coordinates and water injection scheme to maximize EV(NPV) ove all realizations*. 
+
+The GA optimization was conducted using the parallel Computing in R programming language with GA package. [@scrucca2013ga] The initial setup of the algorithm (Optimization parameters) has been shown in the Table \@ref(tab:sets).
+
+```{r sets, echo=FALSE, tidy=FALSE}
+gapara <- data.frame(Parameter=c('Population Size','robability of crossover between pairs of chromosomes','Probability of mutation in a parent chromosome','Maximum Iteration','Number of consecutive generations without any improvement'),
+              Value = c(25,0.8,0.1,20,5))
+colnames(gapara) <- c('GA Parameters', 'Value')
+knitr::kable(gapara, caption = 'Initial Setup of GA for Optimization', booktabs=TRUE)
+```
+
+As reminder, the NPV value is calculated as the following:
+
+\begin{equation}
+NPV=\sum_{k=1}^{n_T} \frac{[q_o^{k}P_o - q_w^k P_w -I^k P_{wi} ]\bigtriangleup t_k}{(1+b)^{t_k/D}}
+  (\#eq:binom105)
+\end{equation}
+
+In each iteration of GA algorithm, the fitness function is the mean NPV of all 50 realizations, defined as the below:
+
+\begin{equation}
+  EV(NPV(u)) = \sum_{i=1}^{n_r=50} \frac{NPV_{i}(u)}{N} 
+  (\#eq:binom110)
+\end{equation}
+
+Where $u$ in this case is the injection well coordinates and injection rate scenarios(defined in Chapter 3).
+
+The EV(NPV(u)) is found using ML proxy developed in the Chapter2, in each iteration. The flow chart of the optimization process in this chapter can be depicted as the Figure \@ref(fig:flowop1).
+
+
+```{r flowop1, echo=FALSE, fig.align='center', fig.cap="Flow Chart of the Optimization Alghorithem", out.width='75%'}
+knitr::include_graphics("flowchartop.png")
+```
+
+
+## Results of Optimization
+
+After running the 500 (25*20) iterations ( which it means 25,000 proxy model iteration because of the 50 realizations), the result of the improvement in the best solution over the 20 generations could be found in the figure (\@ref(fig:Gafigure))
+
+```{r Gafigure, echo=FALSE, fig.align='center', fig.cap="Evolution of GA Algorithem Solution over Generations", out.width='75%'}
+knitr::include_graphics("GAfigure.png")
+```
+
+The best solution after 20 Iteration was found 56.7 $MM. This value is the mean NPV of the all realization at the U( Control vector) with the following parameters of the optimization in the Table \@ref(tab:setsso).[@scrucca2013ga]
+
+
+```{r setsso, echo=FALSE, tidy=FALSE}
+gapara <- data.frame(Parameter=c('X and Y Coordinate of Injector Number 1','X and Y Coordinate of Injector Number 2','X and Y Coordinate of Injector Number 3','X and Y Coordinate of Injector Number 4','Starting Rate of Injector Number 1','Starting Rate of Injector Number 2', 'Starting Rate of Injector Number 3', 'Starting Rate of Injector Number 4',"Gamma Rate of Injector Number 1","Gamma Rate of Injector Number 2","Gamma Rate of Injector Number 3","Gamma Rate of Injectior Number 4"),
+              Value = c(c('3,19'),c('40,9'),c('9,41'),c('34,41'),250,250,100,200,0.0010,0.000,-0.005,0.005))
+colnames(gapara) <- c('Componenet of u Vector', 'Value')
+knitr::kable(gapara, caption = 'Solution of Optimization Algoritem', booktabs=TRUE)
+```
+
+
+
+Now, the other area that was studied in this work is at the optimum control vector, how much the the distribution of NPV found from the Proxy Model differs from the the results of the Numerical Reservoir Simulator at that optimum location. This result will provide some insight about what is the deviation of the result of optimum location in the proxy model compared to complex, physics based model.
+The Figure \@ref(fig:compa22) shows the distribution of the NPV over 50 realizations. The blue and red vertical lines are representative of the mean values. 
+
+```{r compa22, echo=FALSE, fig.align='center', fig.cap="Comparison of the NPV Found (at Optimum Locations) in Machine Learning Vs. Numerical Simulator", out.width='75%'}
+knitr::include_graphics("comparison.png")
+```
+
+
+Finally, we analyze the Value of Complexity in this case. The Value of Complexity is defined as:
+
+* Value Of Complexity = Value Created from Rich Model - Value Created from Physics-Reduced Model*
+
+This Difference, that in this study is shown with the difference in the NPV values of the Machine Learning Model and Eclipse reservoir Simulator has shown in the Figure \@ref(fig:valuecomp)
+
+```{r valuecomp, echo=FALSE, fig.align='center', fig.cap="Value of Complexity (Deviation of Proxy Model from Complex One)", out.width='75%'}
+knitr::include_graphics("valuecomplex.png")
+```
+
+
+
+
+<!-- | Test  |      Replications                  |  Elapsed | Relative |      -->
+<!-- | ------------------ | ----------------------| ---------- | ------- | -->
+<!-- |  GA_Numerical Simulator   | 5 |  1501.24  |  300.248 | 3.385  | -->
+<!-- |  GA_Proxy Model | 5 | 443.56  |  88.712  |  1.000  |        -->
+
+
+
+
+
+

@@ -1,0 +1,40 @@
+# Introduction {#intro}
+
+## Background and Motivation
+
+Application of big data analytics and machine learning in subsurface modeling is taking a lot of attention in recent years. More and more oil and gas corporations are considering to increase their investment in their in-house data to get insight into making a better decision. These practices obviously could bring the speed, less computational resources, more informed decisions and potentially opening up the new alternatives for decisions on the hand. However, the author believes couples of aspect of the implementation of the data analytics and machine learning in subsurface modeling need more careful evaluation. Firstly, although it is possible that the ML model could be a less complex model, the more important question is how much accuracy is going to be sacrificed in order to gain fast model. Secondly, what is the value of building machine learning model (which constitutes data gathering, pattern detection, pattern exploration and exploitation- especially in O&G industry all of thses steps are costly ones) in the particular decision context. Here, the motivation is to chain the concept of VOI (Value of Information) and machine learning. Finally, the current trend in utilizing the data is focused on more " Data-Driven" approach where the data is in the center of decision making; however this study is intended to have a look on " Decision-Driven" approach where the "Decision" in the hand specify which data must be gathered and how much the analyzing the data does worth for that particulate decision. 
+
+## Novelty of the Work
+
+The specific novelties introduced in this work to the literature of ML application in subsurface modeling can be summarized as below:
+
+* Five-spot pattern was considered in this work while including 55 injection scenarios in 4 injection wells.
+* Concept of Value of Information (VOI) was considered in the particular decision context of the development project in order to analyze the value the data analytics project could add to the decision.
+* Genetic Algorithm type of optimization of both well location and injection rates (Joint Optimization) was used in the robust manner while the ML model was served as a fitness function during the evolution of solutions.
+
+
+## Outline of the Thesis
+
+
+Chapter 2 of the work is devoted to providing a workflow to develop the machine learning model as a physics reduced model in comparison to rich, fully physics-based numerical reservoir simulator. To develop this ML model, the Fast Marching Method (FMM) is introduced as the features of the ML model. The chapter concludes by testing the predictive capability of the developed model.
+
+Chapter 3 will discuss VOI analysis and sensitivity analysis using an HRPT (High- Resolution Probability Tree Method). The chapter will provide a workflow to determine the Value of ML model in particular decision context.
+
+Chapter 4 is devoted to utilizing the fast ML model as a response function for optimization. The Genetic Algorithm (GA) will be elaborated and comparison will be made about the performance of the ML model and numerical simulator in the joint optimization.
+
+The final chapter will discuss some takeaways from the application of the ML in subsurface modeling and provide an overview of the advantages and downsides of ML in predictive modeling. In this chapter, some recommendation is made about the types of problems that could be benefited most from ML solutions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

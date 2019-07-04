@@ -1,0 +1,937 @@
+# Appendix
+
+## Sequential Guassian Simulation (R Code)
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+#install.packages(c('gstat','sp','sp','plyr','fields'))
+
+library(gstat)                                 # geostatistical methods by Edzer Pebesma
+library(sp)                                    # spatial points addition to regular 
+                                               # data frames
+library(plyr)                                  # manipulating data by Hadley Wickham 
+library(fields)                                # required for the image plots
+
+
+nx = 45                                       # number of cells in the x direction
+ny = 45                                       # number of cells in the y direction
+xsize = 10.0                                   # extent of cells in x direction
+ysize = 10.0                                   # extent of cells in y direction
+
+
+
+xmin = 0
+ymin = 0
+xmax = xmin + nx * xsize
+ymax = ymin + ny * ysize
+x<-seq(xmin,xmax,by=xsize)                     # used for axes on image plots
+y<-seq(ymin,ymax,by=ysize)                    
+
+
+colmap = topo.colors(100)                      # define the color map and 
+                                               # descritation
+
+nscore <- function(x) {                        # by Ashton Shortridge, 2008
+  # Takes a vector of values x and calculates their normal scores. Returns 
+  # a list with the scores and an ordered table of original values and
+  # scores, which is useful as a back-transform table. See backtr().
+  nscore <- qqnorm(x, plot.it = FALSE)$x  # normal score 
+  trn.table <- data.frame(x=sort(x),nscore=sort(nscore))
+  return (list(nscore=nscore, trn.table=trn.table))
+}
+  
+addcoord <- function(nx,xmin,xsize,ny,ymin,ysize) { # Michael Pyrcz, March, 2018                      
+  # makes a 2D dataframe with coordinates based on GSLIB specification
+  coords = matrix(nrow = nx*ny,ncol=2)
+  ixy = 1
+  for(iy in 1:nx) {
+    for(ix in 1:ny) {
+      coords[ixy,1] = xmin + (ix-1)*xsize  
+      coords[ixy,2] = ymin + (iy-1)*ysize 
+      ixy = ixy + 1
+    }
+  }
+  coords.df = data.frame(coords)
+  colnames(coords.df) <- c("X","Y")
+  coordinates(coords.df) =~X+Y
+  return (coords.df)
+}  
+sim2darray <- function(spdataframe,nx,ny,ireal) { # Michael Pyrcz, March, 2018                      
+  # makes a 2D array from realizations spatial point dataframe
+  model = matrix(nrow = nx,ncol = ny)
+  ixy = 1
+  for(iy in 1:ny) {
+    for(ix in 1:nx) {
+      model[ix,iy] = spdataframe@data[ixy,ireal]  
+      ixy = ixy + 1
+    }
+  }
+  return (model)
+}  
+
+
+sim2vector <- function(spdataframe,nx,ny,ireal) { # Michael Pyrcz, March, 2018                      
+  # makes a 1D vector from spatial point dataframe
+  model = rep(0,nx*ny)
+  ixy = 1
+  for(iy in 1:ny) {
+    for(ix in 1:nx) {
+      model[ixy] = spdataframe@data[ixy,ireal]  
+      ixy = ixy + 1
+    }
+  }
+  return (model)
+}
+
+
+mydata1=read.csv('Welllocation5SGS_inj.csv')
+
+
+j=1
+cumdata <- matrix(0,nrow = 1500,ncol = 4)
+cumdata <- as.data.frame(cumdata)
+for (i in 1:1){
+  sample <- matrix(data.matrix(mydata1[i,2:9]),nrow = 4,ncol = 2)
+  locdata <- data.frame(rbind(matrix(c(23,23),nrow = 1,ncol = 2),sample))
+  locgrid <- matrix(0,nrow=5,ncol = 2)
+  for (k in 1:5) {
+    locgrid[k,1] <- (locdata[k,1]-1)*xsize + 5
+    locgrid[k,2] <- (locdata[k,2]-1)*ysize + 5 
+  }
+  m <- 500
+  s <- 100
+  location <- log(m^2 / sqrt(s^2 + m^2))
+  shape <- sqrt(log(1 + (s^2 / m^2)))
+  Perm <- matrix(rlnorm(5,location,shape),nrow = 5,ncol = 1)
+  logperm <- log10(Perm)
+  logperm <- matrix(logperm,nrow = 5,ncol = 1)
+  mydata2 <- data.frame(cbind(locgrid,Perm,logperm))
+  z <- i*5
+  cumdata[j:z,1:4] <- mydata2
+  colnames(mydata2) <- c('X','Y','Perm','logperm')
+  #head(mydata2)
+  j=j+5
+  
+  
+coordinates(mydata2) = ~X+Y  
+
+npor.trn = nscore(mydata2$logperm)              # normal scores transform
+mydata2[["NPermeability"]]<-npor.trn$nscore     # append the normal scores transform 
+
+cuts = c(2.4,2.45,2.5,2.65,2.7,2.8,2.9)
+cuts.var = c(0.05,.1,.15,.20,.25,.3,.35,.4,.45,.5,.55,.6,.65,.7,.75,.8,.85,.9,.95)
+
+spplot(mydata2, "logperm", do.log = TRUE,      # location map of porosity data
+       key.space=list(x=1.05,y=0.97,corner=c(0,1)),cuts = cuts,
+       scales=list(draw=T),xlab = "X (m)", ylab = "Y (m)",main ="Permeability (Log(K)), 
+       in md")
+
+  coords <- addcoord(nx,xmin,xsize,ny,ymin,ysize) # make a dataframe with 
+                                                #all the estimation locations
+#summary(coords)                                 # check the coordinates
+
+sill = var(mydata2$logperm)                    # calculate the variance of the property 
+                                                #of interest as the sill
+min = min(mydata2$logperm)                     # calculate the property min and max 
+                                                #for plotting
+max = max(mydata2$logperm)               
+zlim = c(min,max)            # define the property min and max in a 2x1 vextor
+
+vm.nug1 <- vgm(psill =0.5*sill, "Sph", 200, anis = c(000, 1.0),nugget=0.5*sill)
+condsim.nug1 = krige(logperm~1, mydata2, coords, model = vm.nug1, nmax = 100, nsim = 10)
+
+
+
+par(mfrow=c(2,2))
+real1 <- sim2darray(condsim.nug1,nx,ny,1)     # extract realization #1 to a
+                                              #  2D array and plot
+image.plot(10^real1,x=x,y=y,xlab="X(m)",ylab="Y(m)",
+zlim = c(min(10^real1),max(10^real1)),
+           col=colmap,legend.shrink = 0.6);
+mtext(line=1, side=3, "Realization #1", outer=F);box(which="plot")
+
+real2 <- sim2darray(condsim.nug1,nx,ny,2)     # extract realization #2 to a
+                                              #2D array and plot
+image.plot(10^real2,x=x,y=y,xlab="X(m)",ylab="Y(m)",
+zlim =c(min(10^real2),max(10^real2)) ,
+           col=colmap,legend.shrink = 0.6);
+mtext(line=1, side=3, "Realization #2", outer=F);box(which="plot")
+
+real3 <- sim2darray(condsim.nug1,nx,ny,3)      # extract realization #3 to a
+                                               # 2D array and plot
+image.plot(10^real3,x=x,y=y,xlab="X(m)",ylab="Y(m)",zlim = c(min(10^real3),max(10^real3)),
+           col=colmap,legend.shrink = 0.6);
+mtext(line=1, side=3, "Realization #3", outer=F);box(which="plot")
+
+real4 <- sim2darray(condsim.nug1,nx,ny,4)      # extract realization #4 to a
+                                               #2D array and plot
+image.plot(10^real4,x=x,y=y,xlab="X(m)",ylab="Y(m)",
+zlim = c(min(10^real4),max(10^real4)),
+           col=colmap,legend.shrink = 0.6);
+mtext(line=1, side=3, "Realization #4", outer=F);box(which="plot")
+
+}
+```
+
+
+## Calculation of Connectivities (FMM) for 5-Spot Pattern (Python Code)
+
+
+```{python, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+
+!pip install pandas
+!pip install numpy
+!pip install pandas
+!pip install seaborn
+!pip install scikit-fmm
+
+import os
+import pandas as pd
+import numpy as np
+import skfmm
+
+loc_well = pd.DataFrame(np.array([[30,80,11,19,18,12,87,88]]),
+                   columns=['X1', 'X2', 'X3','X4','Y1','Y2','Y3','Y4'])
+
+input = pd.DataFrame(np.array([(np.arange(1,18))]),
+columns=['ConI1I2', 'ConI1I3', 'ConI1I4',
+'ConI2I1','ConI2I3','ConI2I4','ConI3I1',
+'ConI3I2','ConI3I4''ConI4I1','ConI4I2',
+'ConI4I3','ConP1I1','ConP1I2','ConP1I3',
+'ConP1I4','PV_flight'])
+
+
+import timeit
+start = timeit.default_timer()
+i=1
+j=1
+ii=str(i)
+jj=str(j)
+ss='C:\\Users\\243886\\OneDrive - Universitetet i Stavanger\\ML-5spot-SGS\\R&\\En$'
+pathnew=ss.replace("&", ii)
+pathnews=pathnew.replace("$", jj)
+os.chdir(pathnews)
+os.getcwd()
+data=pd.read_csv('SPEED.csv')
+speed=data
+speed = speed.iloc[:,0:100]
+phi=np.ones((100,100))
+phi[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+input.loc[0,'ConI1I2']=TimeFMM_hr[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]
+input.loc[0,'ConI1I3']=TimeFMM_hr[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]
+input.loc[0,'ConI1I4']=TimeFMM_hr[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]
+            
+######################################################################################
+            
+phi=np.ones((100,100))
+phi[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+input.loc[0,'ConI2I1']=TimeFMM_hr[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]
+input.loc[0,'ConI2I3']=TimeFMM_hr[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]
+input.loc[0,'ConI2I4']=TimeFMM_hr[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]
+            
+            
+######################################################################################
+            
+            
+phi=np.ones((100,100))
+phi[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+input.loc[0,'ConI3I1']=TimeFMM_hr[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]
+input.loc[0,'ConI3I2']=TimeFMM_hr[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]
+input.loc[0,'ConI3I4']=TimeFMM_hr[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]
+            
+            
+###################################################################################
+            
+phi=np.ones((100,100))
+phi[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+input.loc[0,'ConI4I1']=TimeFMM_hr[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]
+input.loc[0,'ConI4I2']=TimeFMM_hr[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]
+input.loc[0,'ConI4I3']=TimeFMM_hr[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]
+            
+            
+###################################################################################
+phi=np.ones((100,100))
+phi[49, 49]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+input.loc[0,'ConP1I1']=TimeFMM_hr[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]
+input.loc[0,'ConP1I2']=TimeFMM_hr[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]
+input.loc[0,'ConP1I3']=TimeFMM_hr[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]
+input.loc[0,'ConP1I4']=TimeFMM_hr[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]
+            
+##################################################################################
+            
+            
+phi=np.ones((100,100))
+phi[loc_well.loc[i-1,'X1']-1,loc_well.loc[i-1,'Y1']-1]=0
+phi[loc_well.loc[i-1,'X2']-1,loc_well.loc[i-1,'Y2']-1]=0
+phi[loc_well.loc[i-1,'X3']-1,loc_well.loc[i-1,'Y3']-1]=0
+phi[loc_well.loc[i-1,'X4']-1,loc_well.loc[i-1,'Y4']-1]=0
+t_va=skfmm.travel_time(phi,speed,dx=10)
+TimeFMM_hr=t_va**2/4/3600
+PV=(sum(sum(TimeFMM_hr<TimeFMM_hr[49, 49])))/10000
+input.loc[0,'PV_flight']=PV
+stop = timeit.default_timer()
+print('Time: ', stop - start)  
+
+input
+
+```
+
+
+## XGBOOST Machine Learning Model (R Code)
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+setwd("C:/Users/243886/OneDrive - Universitetet i Stavanger/ML-5spot-SGS/Rcode")
+NPVpl <- data.frame(N)
+NPVpl <- NPVpl[, c(1)]
+input1 <- data.frame(input)
+geoin <- read.csv('INPUTPCA489.csv',nrows = F)
+Final_Input <- cbind(input1,NPVpl)
+install.packages(c("e1071", "caret", "doSNOW", "ipred", "xgboost"))
+install.packages(c('lattice','ggplot2'))
+library(caret)
+library(doSNOW)
+INPUTMEAN <- data.frame(INPUTMEAN)
+train <- INPUT
+#=================================================================
+# Data Wrangling
+#=================================================================
+# Set up factors.
+# Subset data to features we wish to keep/use.
+
+features <- c('MC1','MC2','MC3','MC4','MPV','NPVpl')
+c('En1C1','En2C1','En3C1','En4C1','En5C1','En6C1','En7C1','En8C1','En9C1',
+              'En10C1','En1C2','En2C2','En3C2','En4C2','En5C2','En6C2','En7C2','En8C2'
+              ,'En9C2','En10C2','En1C3','En2C3','En3C3','En4C3','En5C3','En6C3','En7C3',
+              'En8C3','En9C3','En10C3','En1C4','En2C4','En3C4','En4C4','En5C4','En6C4',
+              'En7C4','En8C4','En9C4','En10C4','En1PV','En2PV','En3PV','En4PV','En5PV',
+              'En6PV','En7PV','En8PV','En9PV','En10PV','NPVpl')
+train <- train[, features]
+
+#=================================================================
+# Split Data
+#=================================================================
+
+names(train)[26]<-"NPVpl"
+# Use caret to create a 70/30% split of the training data,
+# keeping the proportions of the Survived class label the
+# same across splits.
+set.seed(54321)
+indexes <- createDataPartition(train$NPVpl,
+                               times = 1,
+                               p = 0.7,
+                               list = FALSE)
+profs.train <- train[indexes,]
+profs.test <- train[-indexes,]
+
+
+# Examine the proportions of the Survived class lable across
+# the datasets.
+prop.table(table(train$NPVpl))
+prop.table(table(proonebyone.train$NPVpl))
+prop.table(table(proonebyone.test$NPVpl))
+
+#=================================================================
+# Train Model
+#=================================================================
+# nrounds max_depth  eta gamma colsample_bytree min_child_weight subsample
+#4    4000         6 0.01     0              0.4                2         1
+#   nrounds max_depth   eta gamma colsample_bytree min_child_weight subsample
+#10    4000         6 0.025     0              0.4             2.25         1
+# Set up caret to perform 10-fold cross validation repeated 3 
+# times and to use a grid search for optimal model hyperparamter
+# values.
+train.control <- trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 3,
+                              search = "grid")
+
+
+# Leverage a grid search of hyperparameters for xgboost. See 
+# the following presentation for more information:
+# https://www.slideshare.net/odsc/owen-zhangopen-sourcetoolsanddscompetitions1
+tune.grid <- expand.grid(eta = c(0.0025),
+                         nrounds = c(4000),
+                         max_depth = 6,
+                         min_child_weight = c(2.25),
+                         colsample_bytree = c(0.4),
+                         gamma = 0,
+                         subsample = 1)
+View(tune.grid)
+
+
+# Use the doSNOW package to enable caret to train in parallel.
+# While there are many package options in this space, doSNOW
+# has the advantage of working on both Windows and Mac OS X.
+#
+# Create a socket cluster using 10 processes. 
+#
+# NOTE - Tune this number based on the number of cores/threads 
+# available on your machine!!!
+#
+cl <- makeCluster(10, type = "SOCK")
+
+# Register cluster so that caret will know to train in parallel.
+registerDoSNOW(cl)
+
+library(foreach)
+install.packages('doParallel')
+library(doParallel)
+cl <- makeCluster(30)
+registerDoParallel(cl)
+
+
+# Train the xgboost model using 10-fold CV repeated 3 times 
+# and a hyperparameter grid search to train the optimal model.
+library('xgboost')
+caret.cv <- train(NPVpl ~ ., 
+                  data = profs.train,
+                  method = "xgbTree",
+                  tuneGrid = tune.grid,
+                  trControl = train.control)
+stopCluster(cl)
+caret.cv$bestTune
+# Examine caret's processing results
+# Make predictions on the test set using a xgboost model 
+# trained on all 625 rows of the training set using the 
+# found optimal hyperparameter values.
+preds <- predict(caret.cv, profs.test)
+plot(preds,profs.test$NPVpl,col='red',type = 'p',pch=1 ,xlab = 
+       'NPV predicted by ML ($MM)',ylab = 'NPV of the real Test Data ($MM)',
+     main = 'Test Data vs. ML Prediction')
+abline(a=0,b=1,col=4,lwd=3)    
+mylabel = bquote(italic(R)^2 == .(format(r2, digits = 2)))
+text(x = 40, y = 15, labels = mylabel)
+caret::R2(preds,profs.test$NPVpl)
+# Use caret's confusionMatrix() function to estimate the 
+# effectiveness of this model on unseen, new data
+caret.cv$bestTune
+
+```
+
+## Modyfing the Eclipse Data File + Running the Eclipse Simulator from R Shell (R Code)
+
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+setwd("C:/Users/243886/OneDrive - Universitetet i Stavanger/ML-5spot-INJ-SGS/Rcode")
+library(readr)
+X2D_4Inj_1Prod_R1 <- read_delim("2D_4Inj_1Prod_R.DATA", 
+                                "\t", escape_double = FALSE, na = "null", 
+                                trim_ws = TRUE)
+run <- 'C:/ecl/macros/eclrun.exe eclipse "C:/Users/243886/OneDrive
+- Universitetet i Stavanger/ROOPT_Ide/En#/Ensemble.DATA"'
+
+Eclipse <- function(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,gam1,gam2,gam3,gam4,En){
+  wd <- 'C:/Users/243886/OneDrive - Universitetet i Stavanger/ROOPT_Ide/En#'
+  run1 <- gsub('#',En,run)
+  newwd <- gsub('#',En,wd)
+  setwd(newwd)
+  X1 <- round(X1)
+  X2 <- round(X2)
+  X3 <- round(X3)
+  X4 <- round(X4)
+  Y1 <- round(Y1)
+  Y2 <- round(Y2)
+  Y3 <- round(Y3)
+  Y4 <- round(Y4)
+  slope <- c(-0.0005,-0.00025,0,0.00025,0.00050,0.00075,
+             0.00100,0.00125,0.00150,0.00175,0.00200)
+  Avalue <- c(100,150,200,250,300)
+  A_1 <- Avalue[findInterval(A1,Avalue)]
+  A_2 <- Avalue[findInterval(A2,Avalue)]
+  A_3 <- Avalue[findInterval(A3,Avalue)]
+  A_4 <- Avalue[findInterval(A4,Avalue)]
+  
+  Gam1 <- slope[findInterval(gam1,slope)]
+  Gam2 <- slope[findInterval(gam2,slope)]
+  Gam3 <- slope[findInterval(gam3,slope)]
+  Gam4 <- slope[findInterval(gam4,slope)]
+  
+  data <- X2D_4Inj_1Prod_R1
+  g1 <- data[131,1]
+  g2 <- data[132,1]
+  g3 <- data[133,1]
+  g4 <- data[134,1]
+  g5 <- data[138,1]
+  g6 <- data[139,1]
+  g7 <- data[140,1]
+  g8 <- data[141,1]
+  G1 <- gsub('101',X1, g1)
+  G2 <- gsub('102',Y1, G1)
+  G3 <- gsub('103',X2, g2)
+  G4 <- gsub('104',Y2, G3)
+  G5 <- gsub('105',X3, g3)
+  G6 <- gsub('106',Y3, G5)
+  G7 <- gsub('107',X4, g4)
+  G8 <- gsub('108',Y4, G7)
+  G9 <- gsub('109',X1, g5)
+  G10 <- gsub('110',Y1, G9)
+  G11 <- gsub('111',X2, g6)
+  G12 <- gsub('112',Y2, G11)
+  G13 <- gsub('113',X3, g7)
+  G14 <- gsub('114',Y3, G13)
+  G15 <- gsub('115',X4, g8)
+  G16 <- gsub('116',Y4, G15)
+  data[131,1] <- G2
+  data[132,1] <- G4
+  data[133,1] <- G6
+  data[134,1] <- G8
+  data[138,1] <- G10
+  data[139,1] <- G12
+  data[140,1] <- G14
+  data[141,1] <- G16
+  #'C:/Users/243886/OneDrive - Universitetet i Stavanger/ROOPT/Ecl'
+  write.table(data, file ="Ensemble.DATA", sep = "\t",quote = F,
+              row.names = F,col.names = F)
+  int <- seq(from=0,to=1485,by=30)
+  InjectionRatesex <- Injec_up1
+  InjectionRatesex[seq(from=2,to=400,by=8),5] <- A_1*exp(-Gam1*int)
+  InjectionRatesex[seq(from=3,to=400,by=8),5] <- A_2*exp(-Gam2*int)
+  InjectionRatesex[seq(from=4,to=400,by=8),5] <- A_3*exp(-Gam3*int)
+  InjectionRatesex[seq(from=5,to=400,by=8),5] <- A_4*exp(-Gam4*int)
+  write.table(InjectionRatesex, 'InjectionRates.inc',quote = F,
+              row.names = F,col.names = F, na = '')
+  a1 <- A_1*exp(-Gam1*int)
+  a2 <- A_2*exp(-Gam2*int)
+  a3 <- A_3*exp(-Gam3*int)
+  a4 <- A_4*exp(-Gam4*int)
+  AA <- a1+a2+a3+a4
+  shell(run1)
+  return(aa(AA,newwd))
+  
+}
+```
+
+
+## Net Present Value Calculation - Processing the Eclipse Output Data (R Code)
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+setwd("C:/Users/243886/OneDrive - Universitetet i Stavanger/ML-5spot-INJ-SGS
+      /R1/En1")
+ens <- "ENSEMBLE.RSM"
+NPV <- read.delim(ens,  header=FALSE, comment.char="#")
+NPVcalc <- NPV[, c(2,5,6)]
+colnames(NPVcalc) <- c('Days', 'Oilrate', 'waterrate')
+NPVcalc <- na.omit(NPVcalc)
+NPVcalc <- NPVcalc[-seq(9,400,by = 2), ]
+rownames(NPVcalc) <- 1:nrow(NPVcalc)
+days <- as.numeric(levels(NPVcalc$Days))[as.integer(NPVcalc$Days)]
+days <- na.omit(days)
+l1 <- min(which(days==c(1), arr.ind = TRUE))
+l2 <- min(which(days==c(1500), arr.ind = TRUE))
+days <- days[c(l1:l2)]
+oil <- as.numeric(levels(NPVcalc$Oilrate))[as.integer(NPVcalc$Oilrate)]
+oil <- na.omit(oil)
+oil <- oil[c(l1:l2)]
+water <- as.numeric(levels(NPVcalc$waterrate))[as.integer(NPVcalc$waterrate)]
+water <- na.omit(water)
+water <- water[c(l1:l2)]
+FWCT <- numeric(length = length(water))
+FWCT <- water/(water+oil)
+t <- seq(0,days[length(which(FWCT<0.85, arr.ind = TRUE))],by = 30)
+t[1] <- 1
+cashflow <- numeric(length(t)-1)
+discashflow <- numeric(length(t)-1)
+b <- 0.08
+for (j in 1:(length(t)-1)) {
+  m1 <- t[j]
+  z1 <- which(days==c(m1), arr.ind = TRUE)
+  m2 <- t[j+1]
+  z2 <- which(days==c(m2), arr.ind = TRUE)
+  cashflow[j] <- (mean(oil[z1],oil[z2])*6.29*75-mean
+                  (water[z1],water[z2])*6.29*19-A[j]*5*6.29)*30
+  discashflow[j] <- cashflow[j]/((1+b)^(t[j+1]/360))
+}
+sum(discashflow)
+```
+
+
+## Alghorithem of VOI Calculation in HRDP Method (R Code)
+
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+fn_EVII <- function(x_mean,x_sd,z_mean,z_sd,rho,Cost) {
+set.seed(1234)
+N <- 1000         # Number of grid nodes
+rho <- rho          # Correlation Coefficient
+x_mean <- x_mean-Cost    # mean of prior
+x_sd <- x_sd      # standard Deviation Prior
+z_mean <- z_mean-Cost     # standard Deviation signal
+z_sd <- z_sd       # standard Deviation signal
+range <- quantile(rnorm(10^6,x_mean,x_sd),c(0.000001,0.99999))
+xx <- seq(range[[1]],range[[2]],length.out = N+1)
+ss <- seq(range[[1]],range[[2]],length.out = N+1)
+X <- c(rep(0,N))
+S <- c(rep(0,N))
+for (i in 1:N) {
+  X[i] <- (xx[i]+xx[i+1])/2
+}
+
+for (i in 1:N) {
+  S[i] <- (ss[i]+ss[i+1])/2
+}
+# Prior Plot
+z <- S
+x <- X
+
+f_x<- dnorm(x, x_mean,x_sd)
+f_x_N <- f_x/sum(f_x)
+
+# Signal Plot
+f_z <- dnorm(z,z_mean,z_sd)
+f_z_N <- f_z/sum(f_z)
+
+# Liklihood Table
+Lik <- matrix(0,nrow = N,ncol = N)          # Liklihood table, x in columns and z in rows
+
+for (j in 1:N) {
+  mean <- z_mean + (rho*z_sd*(x[j]-x_mean)/x_sd)  
+  sd <- ((1-rho^2)*x_sd^2)^0.5
+  z_di <- dnorm(z, mean,sd)
+  z_di_N <- z_di/sum(z_di)
+  Lik[,j] <- z_di_N
+}
+
+Prepos <- c(rep(0,N))                     # Preposterior Rows
+Pos <- matrix(0,nrow = N,ncol = N)    # Posterior Table
+for (j in 1:N) {
+  Prepos[j] <- sum(Lik[j,]*f_x_N)
+  for (i in 1:N) {
+    Pos[i,j] <- Lik[j,i]*f_x_N[i]/Prepos[j]
+  }
+  Pos[,j] <- Pos[,j]/sum(Pos[,j])
+}
+
+sum <- 0
+for (j in 1:N) {
+  VOI <- Prepos[j]*max(sum(Pos[,j]*x),0)
+  sum <- sum + VOI
+}
+EVII <- sum-max(sum(x*f_x_N),0)
+return(EVII)
+}
+```
+
+
+## Alghorithem of Sensitivity Analysis of VOI to Mean of Prior (R Code)
+
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+
+X <- data.frame(NPV =rnorm(100000,30,5))
+Y <- data.frame(NPV = rnorm(100000,40,5))
+Z <- data.frame(NPV = rnorm(100000,50,5))
+E <- data.frame(NPV = rnorm(100000,60,5))
+ee <- data.frame(NPV = rnorm(100000,70,5))
+
+# Now, combine your two dataframes into one.  
+# First make a new column in each that will be 
+# a variable to identify where they came from later.
+X$type <- 'Mean_PV_Production_Prior = 30'
+Y$type <- 'Mean_PV_Production_Prior = 40'
+Z$type <- 'Mean_PV_Production_Prior = 50'
+E$type <- 'Mean_PV_Production_Prior = 60'
+ee$type <- 'Mean_PV_Production_Prior = 70'
+
+# and combine into your new data frame vegLengths
+vegLengths <- rbind(X,Y,Z,E,ee)
+ggplot(vegLengths, aes(NPV, fill = type)) + geom_density(alpha = 0.2) 
+
+
+```
+
+
+## Alghorithem of Sensitivity Analysis of VOI to Standard Deviation of Prior (R Code)
+
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+
+X <- data.frame(NPV =rnorm(100000,50,2.5))
+Y <- data.frame(NPV = rnorm(100000,50,5))
+Z <- data.frame(NPV = rnorm(100000,50,10))
+E <- data.frame(NPV = rnorm(100000,50,15))
+
+# Now, combine your two dataframes into one.  
+# First make a new column in each that will be 
+# a variable to identify where they came from later.
+X$type <- 'SD_PV_Production_Prior = 2.5'
+Y$type <- 'SD_PV_Production_Prior = 5'
+Z$type <- 'SD_PV_Production_Prior = 10'
+E$type <- 'SD_PV_Production_Prior = 15'
+
+# and combine into your new data frame vegLengths
+vegLengths <- rbind(X,Y,Z,E)
+ggplot(vegLengths, aes(NPV, fill = type)) + geom_density(alpha = 0.2)    
+```
+
+
+
+
+
+## Optimization Alghorithem, Fittness Function: Machine Learning Model  (R Code)
+
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+modelxgb <- readRDS('NEWMODELUP.rds')
+speed_En1_Re <- read.csv('SPEED.csv',header=T)
+speed <- speed_En1_Re[,2:46]
+install.packages(c('GA','fastmaRching'))
+install.packages(c('parallel','doParallel'))
+library(doParallel)
+library(GA)
+library(fastmaRching)
+
+ML_fun_grid <- function(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,
+                        gam1,gam2,gam3,gam4,speed){
+  X1 <- round(X1)
+  X2 <- round(X2)
+  X3 <- round(X3)
+  X4 <- round(X4)
+  Y1 <- round(Y1)
+  Y2 <- round(Y2)
+  Y3 <- round(Y3)
+  Y4 <- round(Y4)
+  slope <- c(-0.0005,-0.00025,0,0.00025,0.00050,0.00075,0.00100,0.00125,
+             0.00150,0.00175,0.00200)
+  Avalue <- c(100,150,200,250,300)
+  A_1 <- Avalue[findInterval(A1,Avalue)]
+  A_2 <- Avalue[findInterval(A2,Avalue)]
+  A_3 <- Avalue[findInterval(A3,Avalue)]
+  A_4 <- Avalue[findInterval(A4,Avalue)]
+  
+  Gam1 <- slope[findInterval(gam1,slope)]
+  Gam2 <- slope[findInterval(gam2,slope)]
+  Gam3 <- slope[findInterval(gam3,slope)]
+  Gam4 <- slope[findInterval(gam4,slope)]
+  
+  con_fm <- c(rep(0,11))
+  grid <- speed
+  seed <- c(X1,Y1,0,1)
+  fm <- gridFastMarch(grid, seed, spatial.res=10)
+  con_fm[1] <- fm$arrival.time[X2,Y2]^2/4/3600
+  
+  
+  seed <- c(X3,Y3,0,1)
+  fm <- gridFastMarch(grid, seed, spatial.res=10)
+  con_fm[2] <- fm$arrival.time[X1,Y1]^2/4/3600
+  con_fm[3] <- fm$arrival.time[X2,Y2]^2/4/3600
+  
+  
+  seed <- c(X4,Y4,0,1)
+  fm <- gridFastMarch(grid, seed, spatial.res=10)
+  con_fm[4] <- fm$arrival.time[X1,Y1]^2/4/3600
+  con_fm[5] <- fm$arrival.time[X2,Y2]^2/4/3600
+  con_fm[6] <- fm$arrival.time[X3,Y3]^2/4/3600
+  
+  
+  seed <- c(23,23,0,1)
+  fm <- gridFastMarch(grid, seed, spatial.res=10)
+  con_fm[7] <- fm$arrival.time[X1,Y1]^2/4/3600
+  con_fm[8] <- fm$arrival.time[X2,Y2]^2/4/3600
+  con_fm[9] <- fm$arrival.time[X3,Y3]^2/4/3600
+  con_fm[10] <- fm$arrival.time[X4,Y4]^2/4/3600
+  seed <- cbind(c(X1,Y1,0,1),c(X2,Y2,0,1),c(X3,Y3,0,1),c(X4,Y4,0,1))
+  fm <- gridFastMarch(grid, seed, spatial.res=10)
+  fmm_N <- fm$arrival.time^2/4/3600
+  PV=(sum(sum(fmm_N<fmm_N[23, 23])))*1000/20250
+  con_fm[11] <- PV
+  
+  NPV_Ml <- predict(modelxgb,data.frame(ConI1I2=con_fm[1],ConI3I1=con_fm[2],
+            ConI3I2=con_fm[3],ConI4I1=con_fm[4],
+            ConI4I2=con_fm[5],
+            ConI4I3=con_fm[6],ConPI1=con_fm[7],
+            ConPI2=con_fm[8], ConPI3=con_fm[9],ConPI4=con_fm[10],
+            PV_flight=con_fm[11],A1=A_1,A2
+           =A_2,A3=A_3,A4=A_4,gam1=Gam1,gam2=Gam2,gam3=Gam3,gam4=Gam4))
+  return(NPV_Ml)
+}
+
+
+ML_fun_En <- function(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,gam1,gam2,gam3,gam4) {
+  result <- c(rep(0,10))
+  for (i in 1:10) {
+    grid <- my.list[[i]]
+    result[i] <- ML_fun_grid(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,gam1,gam2,gam3
+                             ,gam4,speed=grid)
+  }
+  mean_result <- mean(result)
+  return(mean_result)
+}
+
+A <- ga(type = "real-valued", 
+fitness = function(x) + ML_fun_En(x[1],x[2],x[3],
+x[4],x[5],x[6],x[7],x[8],x[9],                                                             x[10],x[11],x[12],x[13],x[14],x[15],
+x[16]),lower = c(rep(1,8),rep(100,4),
+rep(-0.0005,4)), upper = c(rep(45,8),rep(300,4),
+rep(0.002,4)),popSize = 50, maxiter = 50,
+run = 10,parallel = T)
+
+```
+
+
+## Optimization Alghorithem, Fittness Function: Eclipse Reservoir Simulator  (R Code)
+
+```{r, fig.align='left', message=FALSE, warning=FALSE, eval=FALSE}
+
+setwd("C:/Users/243886/OneDrive - Universitetet i Stavanger/ML-5spot-INJ-SGS/Rcode")
+library(readr)
+X2D_4Inj_1Prod_R1 <- read_delim("2D_4Inj_1Prod_R.DATA", 
+                                "\t", escape_double = FALSE, na = "null", 
+                                trim_ws = TRUE)
+run <- 'C:/ecl/macros/eclrun.exe eclipse "C:/Users/243886/OneDrive - 
+Universitetet i Stavanger/ROOPT_Ide/En#/Ensemble.DATA"'
+
+Eclipse <- function(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,gam1,gam2,gam3,gam4,En){
+  wd <- 'C:/Users/243886/OneDrive - Universitetet i Stavanger/ROOPT_Ide/En#'
+  run1 <- gsub('#',En,run)
+  newwd <- gsub('#',En,wd)
+  setwd(newwd)
+  X1 <- round(X1)
+  X2 <- round(X2)
+  X3 <- round(X3)
+  X4 <- round(X4)
+  Y1 <- round(Y1)
+  Y2 <- round(Y2)
+  Y3 <- round(Y3)
+  Y4 <- round(Y4)
+  slope <- c(-0.0005,-0.00025,0,0.00025,0.00050,0.00075,0.00100,0.00125,
+             0.00150,0.00175,0.00200)
+  Avalue <- c(100,150,200,250,300)
+  A_1 <- Avalue[findInterval(A1,Avalue)]
+  A_2 <- Avalue[findInterval(A2,Avalue)]
+  A_3 <- Avalue[findInterval(A3,Avalue)]
+  A_4 <- Avalue[findInterval(A4,Avalue)]
+  
+  Gam1 <- slope[findInterval(gam1,slope)]
+  Gam2 <- slope[findInterval(gam2,slope)]
+  Gam3 <- slope[findInterval(gam3,slope)]
+  Gam4 <- slope[findInterval(gam4,slope)]
+  
+  data <- X2D_4Inj_1Prod_R1
+  g1 <- data[131,1]
+  g2 <- data[132,1]
+  g3 <- data[133,1]
+  g4 <- data[134,1]
+  g5 <- data[138,1]
+  g6 <- data[139,1]
+  g7 <- data[140,1]
+  g8 <- data[141,1]
+  G1 <- gsub('101',X1, g1)
+  G2 <- gsub('102',Y1, G1)
+  G3 <- gsub('103',X2, g2)
+  G4 <- gsub('104',Y2, G3)
+  G5 <- gsub('105',X3, g3)
+  G6 <- gsub('106',Y3, G5)
+  G7 <- gsub('107',X4, g4)
+  G8 <- gsub('108',Y4, G7)
+  G9 <- gsub('109',X1, g5)
+  G10 <- gsub('110',Y1, G9)
+  G11 <- gsub('111',X2, g6)
+  G12 <- gsub('112',Y2, G11)
+  G13 <- gsub('113',X3, g7)
+  G14 <- gsub('114',Y3, G13)
+  G15 <- gsub('115',X4, g8)
+  G16 <- gsub('116',Y4, G15)
+  data[131,1] <- G2
+  data[132,1] <- G4
+  data[133,1] <- G6
+  data[134,1] <- G8
+  data[138,1] <- G10
+  data[139,1] <- G12
+  data[140,1] <- G14
+  data[141,1] <- G16
+  #'C:/Users/243886/OneDrive - Universitetet i Stavanger/ROOPT/Ecl'
+  write.table(data, file ="Ensemble.DATA", sep = "\t",quote = F,
+              row.names = F,col.names = F)
+  int <- seq(from=0,to=1485,by=30)
+  InjectionRatesex <- Injec_up1
+  InjectionRatesex[seq(from=2,to=400,by=8),5] <- A_1*exp(-Gam1*int)
+  InjectionRatesex[seq(from=3,to=400,by=8),5] <- A_2*exp(-Gam2*int)
+  InjectionRatesex[seq(from=4,to=400,by=8),5] <- A_3*exp(-Gam3*int)
+  InjectionRatesex[seq(from=5,to=400,by=8),5] <- A_4*exp(-Gam4*int)
+  write.table(InjectionRatesex, 'InjectionRates.inc',quote = F,
+              row.names = F,col.names = F, na = '')
+  a1 <- A_1*exp(-Gam1*int)
+  a2 <- A_2*exp(-Gam2*int)
+  a3 <- A_3*exp(-Gam3*int)
+  a4 <- A_4*exp(-Gam4*int)
+  AA <- a1+a2+a3+a4
+  shell(run1)
+  return(aa(AA,newwd))
+  
+}
+
+
+aa <- function(AA,newwd){
+  setwd(newwd)
+  ens <- "ENSEMBLE.RSM"
+  NPV <- read.delim(ens,  header=FALSE, comment.char="#")
+  NPVcalc <- NPV[, c(2,5,6)]
+  colnames(NPVcalc) <- c('Days', 'Oilrate', 'waterrate')
+  NPVcalc <- na.omit(NPVcalc)
+  NPVcalc <- NPVcalc[-seq(9,400,by = 2), ]
+  rownames(NPVcalc) <- 1:nrow(NPVcalc)
+  days <- as.numeric(levels(NPVcalc$Days))[as.integer(NPVcalc$Days)]
+  days <- na.omit(days)
+  l1 <- min(which(days==c(1), arr.ind = TRUE))
+  l2 <- min(which(days==c(1500), arr.ind = TRUE))
+  days <- days[c(l1:l2)]
+  oil <- as.numeric(levels(NPVcalc$Oilrate))[as.integer(NPVcalc$Oilrate)]
+  oil <- na.omit(oil)
+  oil <- oil[c(l1:l2)]
+  water <- as.numeric(levels(NPVcalc$waterrate))[as.integer(NPVcalc$waterrate)]
+  water <- na.omit(water)
+  water <- water[c(l1:l2)]
+  FWCT <- numeric(length = length(water))
+  FWCT <- water/(water+oil)
+  t <- seq(0,days[length(which(FWCT<0.85, arr.ind = TRUE))],by = 30)
+  t[1] <- 1
+  cashflow <- numeric(length(t)-1)
+  discashflow <- numeric(length(t)-1)
+  b <- 0.08
+  for (j in 1:(length(t)-1)) {
+    m1 <- t[j]
+    z1 <- which(days==c(m1), arr.ind = TRUE)
+    m2 <- t[j+1]
+    z2 <- which(days==c(m2), arr.ind = TRUE)
+    cashflow[j] <- (mean(oil[z1],oil[z2])*6.29*75-
+                      mean(water[z1],water[z2])*
+                      6.29*19-AA[j]*5*6.29)*30
+    discashflow[j] <- cashflow[j]/((1+b)^(t[j+1]/360))
+  }
+  return(sum(discashflow))}
+
+Eclipse1 <- function(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,
+                     gam1,gam2,gam3,gam4) {
+  a <- foreach(En=1:50, .export=c("Eclipse")) %dopar% {
+    Eclipse(X1,Y1,X2,Y2,X3,Y3,X4,Y4,A1,A2,A3,A4,gam1,gam2,
+            gam3,gam4,En)
+  }
+  return(mean(unlist(a)))
+}
+
+GA_Eclipse <- ga(type = "real-valued", 
+        fitness = function(x) Eclipse1(x[1],x[2],x[3],
+        x[4],x[5],x[6],x[7],x[8],x[9]
+       ,x[10],x[11],x[12],x[13],x[14],x[15],x[16])
+        ,lower = c(rep(1,8),rep(100,4),rep(-0.0005,4)), 
+        upper = c(rep(45,8),rep(300,4),rep(0.002,4)),
+            popSize = 25, maxiter = 20,run = 10,parallel = T, 
+            suggestions = suggestedSol)
+```

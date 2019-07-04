@@ -1,0 +1,33 @@
+# Introduction {#intro}
+
+## Background and Motivation
+
+
+Application of Data Analytics and Machine Learning in petroleum reservoir management have received a lot of attention in recent years. Mainly, due to availability of sheer computational recources and large data set. Having said this, this thesis aims to utilize the machine learning models and build the proxy model(Here it is defined as less rich model or physical reduced model) in order to make a better decision and appropriate time frame during well placement for the field development. Both one-to-one injecion production pair and as well five spot pattern will be considered in building the proxy model. Concept of Fast Marching method (FMM) was utilized to to determine the connectivity of any pair point within the heterogeneous reservoir.This feature (Connectivities) will provide information about the physics of dynamics in the reservoir. Further, this connectivity (other parameters as well) were used as the feature of ML to predict the desired output(Receovery Factor, NPV,...) through training the ML model.To generate the output offield performance in the past, the Numerical Reservoir simulator was used with couple of of realizations of the field data in order to capture the uncertainty in the petrophysical parameters of the field. 
+
+Then , the this fast and computationally inexpensive model are used to optimize the well placement and as well injection rates in the aforementioned field develepment patterns.Genetic Alghorithem (GA) type of Evulutonary Alghortithems is used as the algorithm of the optimization while Proxy model will provide the response function(in this work, it is NPV).
+
+The study as well will cover  the concept of value of Information (VOI). In the contex of this work, it is believed that ML model provide information about the decision( decision nodes include well location and injection rates) to help the decision makers make a better decisions. To achive that, HRDP (High Resolution Discretization) was used to discrete the continous distribution and find the Value of Information (Here the raw petrophysical properties of the reservoirs serve as Data and Ml moldes provides the Information out of that Data). Like all VOI analysis, since decision makers is not sure about the it's own prior, reliability  of the assigned distribution, the sensivity analysis is made to capture broade r secanrio  in VOI analysis.This quantification will be helpful for oil and gas company to prioritize in their investment in data analytic projects based on value that data analytic could create.
+
+Finally, the obstacles and opportunities of applying the data analytic and Machine learning in subsurface modeling will be discussed. First, the challenges in implementing of-the-shelf solutions (models and framework) from other technical fields for reservoir production and management will be raised. Then, on the bright side the research will map out the areas and activities that data analytic could significantly achieve success in field of subsurface modeling.
+
+## Novelty of the work
+
+The specific novelties introduced in this thesisi to the literature of ML application in subsurface modeling can be summarized as the below:
+
+* Five-spot pattern was considered in this work while including different injection scenarios in 4 injection wells.
+* Concepte of Value of Information (VOI) was perfoemed in the particulare decision context of the development project in order to analyszie the 
+the value the data analytic project could add to the decision
+* Genethic Alghorithem type of optimzation of both well location and injectipon rate was used while the ML model was used the the fittness function in Otimization iterations.
+
+
+## Outline of the Thesis
+
+
+The chapter 2 of the work is devoted to provide workflow to develop the macheine Learning model as a physic reduced model in comparison to rich, fully physic based numerical reservoir simulator. to develop this ML model, the Fast Marching Method will be introduced as the fatures of the Ml model. The predictive capability of Developed Model will be tested in two development secnario.
+
+the chapter 3 will dicuss VOI analysis and sensitivity analysis using HRDT method. The chapter will provide a worwflow to determine the Value of ML model in particulatr decision contex.
+
+The chapter 4 is deveoted to utilize the fast ML model as response function for optimization. The genetick Alghorithem will be elaborated and comparison will be made about performance of ML model and Numerical simulator in the optimizing the well locations as well injection rates.
+
+The final chapter will specifcy dicuss some take aways from application of the ML in subsurface modeling and provide the overview about advantages and divantages of ML in predicve modeling. In this chapter, we will dicuss about the what are wich problem could be addressed using ML and wich problems is beeetr of not to employ ML.

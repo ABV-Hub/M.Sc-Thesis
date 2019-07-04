@@ -1,0 +1,616 @@
+# Development of Proxy Model (Less Rich Model) Using a Machine Learning  
+
+
+## Introduction
+
+Proxy reservoir models [^1] traditionally have been used as a computationally efficient method to simulate reservoir and well responses in subsurface modeling. The advantage of this area of application is that parts of the governing physics can be modified to a simpler mathematical equations, or through the use of data-driven methods, thereby sacrificing some accuracy for a significant decrease in the computational time and resource needed. This fast, computationally inexpensive model is especially very useful during the optimization process where iteration in the order of several thousand is required. Herein, we classify the proxy models in the two main categories, physics-based and data-driven approaches.
+
+### Physics-Based Proxies
+
+Physics-based proxies incorporate the mathematics of fluid flow in a simpler framework using assumptions that may be deemed appropriate for the situation. Examples of this approach include capacitance-resistance (CRM) modeling which is based on material balance and derived from total fluid connectivity. [@sayarpour2009field], the Fast Marching Method (FMM)[@sethian1996fast, @sharifi2014dynamic] and random walker particle tracking (RWPT)[@stalgorova2012field]. [@sayarpour2009field] used CRM to characterize the resevoir response based on inter-well connectivity. These connectivities, as will be discussed in the rest of this chapter, present a an efficient way to densely include the reservoir geology without explicitly invoking the petrophysical properties of the field. However, as opposed to static connectivities that are used in this work (In CRM model, history matching is performed to calculate connectivities; while in FMM connectivities are found using before production.). In CRM model connectivity are dependent not only on the static reservoir geology, but on the dynamic injection and production rates. 
+
+#### Data-Driven Based Proxies
+
+Over the last decades, data-driven based proxies have increased dramatically in popularity, owing to recent advances in big data and a broad wave of emerging ‘Machine Learning’ applications in research and industry. This class of proxies have a entirely data-driven approach, in which a sets of of data observations are trained for forecasting of reservoir out without relying on any specific physical equatipons. The training data set used for training the model could be found from field measurements, or synthesized using a commercial reservoir simulator. Most studies in this area have used artificial neural networks (ANN) (@ahmadi2013evolving),[@yu2008dynamic],
+as the learning algorithm, although implementation of tree-based methods such as random forests and gradient boosting is common. [@castelletti2010tree]
+
+
+### Data-Driven or Physical Based-Proxy?
+
+Whether using the physics-based proxy or data-driven proxy, one should keep in mind the statement of the George Box[@box1979all], "All models are wrong, some are useful." Therefore, the main purpose of the models are to support the decision maker with providing the insight.  On the other hand, [@bratvold2009value],noted that "O& G companies tend to build too much detail in their decision-making models from the beginning". Here, considering the voluminous codes and models in the commercial simulators, the work tends to build proxy model (less rich model) to help decision makers make a decision in a 'timely' manner. Then, choosing between "Data-Driven"  or "Physic Based" proxy, herein the research take fully advantages of the both methods in the new method named "Hybrid Proxy". In this work the proxy is neither fully data-driven nor physical based, but combination of the both. In fact, in the hybrid approach, we calculate the 'Features' of the ML algorithm using the physical-based approach while then we take advantage of the recent advance in pattern recognition techniques (Machine Learning), to find the pattern between those 'Features' and response of the reservoir. The Fast Marching Method (FMM) introduced by [@sethian1996fast] and has been used to compute travel times of the pressure front from a source/sink [@sharifi2014dynamic] often called ‘diffusive times of flight’ are the features used in this work driven from physic-based analytical method.[@nwachukwu2018fast]
+
+
+## Workflow 
+
+In this chapter the method used to build the proxy model will be explained. The methodology to build this proxy model can be explained in the six steps. First, we provide the brief summary of this methodology but in the next pages more complete description of the each step will be further explained. The flow diagram of the development process has been depicted in the Figure \@ref(fig:flowdiagram). The development of this proxy consist of the following steps:
+
+1. Geological model and the type of field development scenario (five spot pattern or any injection scenario) should be specified.
+
+2. After specifying the model, the  Sequential Gaussian Simulation (SGS) is performed to build the different realizations the petrophysical parameter. (In this work, the permeability was defined as the source of uncertainty and different realizations are representative of the uncertainty in the permeability data)
+
+3. In each realization, the Fast Marching Method (FMM) is performed to find the connectivities between injectors and producers, between injectors and pore volume of the flight.
+
+4. The realizations in step 2 with it's injection scenario are fed to the numerical simulator to produce the monthly Oil production, water injection and water production as the result forward  fully physic-based model.
+
+5. In this step, the output of numerical simulator is post processed to extract the monthly production of water and oil.
+
+6. At last step, we calculate the Net Present Value (NPV) of the development scenario to be used as the output of the ML algorithm.
+
+
+```{r flowdiagram, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="Flow Diagram of Development of the Proxy Model", out.width='100%'}
+knitr::include_graphics("flowdiagram.png")
+```
+
+### Geological Model and Heterogeneity
+
+In this work, two-dimensional reservoir geometry with two phases water/oil system was considered. The grid based geological model with size of the $45*45$ was used in this work. The parameters of the model and rock and water properties have shown in the Table \@ref(tab:resdata).
+
+```{r resdata, echo=FALSE, tidy=FALSE}
+resdata <- data.frame(Parameter=c('Grid Dimension','Grid Size','Porosity','Compressibility',
+              'Initial pressure',
+              'Initial Saturation'),
+              Value = c('45 by 45','10 by 10 by 10 m' ,'20%','10^-5 1/psi','234 bar','0.3'))
+knitr::kable(resdata, caption = 'Rock and Fluid Characteristics of 
+             the Geological Model', booktabs=TRUE)
+```
+
+The relative permeability curves of the reservoir model in this work as well have been shown in the Figure \@ref(fig:relperm). The relative permeability curves cross each other on Sw>0.6, indicating more 'water-wet' system of the fluid and rock of the model.
+
+```{r relperm, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Relative Permeability Curves, water/oil System', message=FALSE, warning=FALSE, out.width='100%'}
+library(ggplot2)
+suppressMessages(library("tidyverse"))
+data <- read.csv("datarelperm1.csv", sep = ';')
+data <- data[2:23,]
+ggplot(data) +
+  geom_point(aes(x=SW,y=Krw,color='Relative Perm Krw')) +
+  geom_point(aes(x=SW,y=Kro,color='Relative Perm Kro')) + 
+  labs(y = "Oil Relative Permeability (Kro)",
+       x = "Water Saturation (Sw)",
+       colour = "Phase") +
+  scale_y_continuous(sec.axis = sec_axis(~.+0),name = 'Relative Permeability (Kkr)')
+```
+
+
+### Generating Geological Realization using Gaussian Sequential simulation (SGS)
+
+In this work, Sequential Gaussian Simulation (SGS) was used to generate realizations of the each permeability. For example, in the 5-spot pattern, the permeability of the 5 wells (4 injectors and one producer) are driven randomly from the distribution of the permeability of the field which has the log-normal distribution.[@pyrcz2014geostatistical]
+
+```{r permk, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE,fig.cap=" Log-Normal Distribution of the Field Permeability"}
+
+m <- 500
+s <- 100
+location <- log(m^2 / sqrt(s^2 + m^2))
+shape <- sqrt(log(1 + (s^2 / m^2)))
+data.frame_Perm <- data.frame(Perm=rlnorm(100000,location,shape))
+ggplot(data.frame_Perm, aes(x=Perm)) + 
+  geom_histogram(aes(y=..density..),      # Histogram with density instead of 
+                                          #count on y-axis
+                 binwidth=.5,
+                 colour="blue", fill="white") +
+   xlab('Permeability,Kh (md)')+
+  geom_vline(aes(xintercept = mean(data.frame_Perm[,1])),
+             col='red',size=2) 
+```
+
+For the sake of this work, we considered the following distribution in the Figure \@ref(fig:permk) as the distribution of the permeability in the field under study (It is considered $K_{h}=K_{v}$)
+
+Now, for every training observation [^2], we build 10 realizations [^3] of the permeability.  SGS starts by creating a grid of randomly assigned values drawn from a standard normal distribution (mean = 0 and SD = 1). The co-variance model (from the semivariogram defined in the Simple Kriging layer, which is required as input for generating realizations ) is then applied. This ensures that raster values conform to the spatial coordinates found in the input data-set. The resulting raster constitutes one unconditional realization, and many more can be produced using a different raster of random values from gaussian Distribution at each time.
+
+The steps involved in SGS can be summarized as the follows:
+
+Step 1: In this case, the log 10 of permeability data  are transformed  into Gaussian values using the Q-Q plot.														
+
+Step 2: The distance matrix is calculated, that is the distance between the data and the unknown location.	Here the unknown locations are the random path.													
+Step 3: Input the model of spatial continuity in the form of an isotropic spherical variogram and nugget effect (contributions should sum to one). 														
+Step 4: Variogram matrix is calculated by applying the distance matrix to the isotropic variograms model.														
+
+Step 5: Covaraince matrix is calculated by subtracting the variogram from the variance (1 for standard normal distribution).														
+
+Step 6: The left hand side of the co-variance matrix is inverted.														
+Step 7: The inverted left hand-side matrix is multiplied by the right hand side matrix to calculate the simple kriging weights.														
+
+Step 8: The kriging estimate and kriging variance are calculated with the weights and co-variances.														
+
+Step 9: With the Gaussian assumption for the local CDF, the Monte Carlo simulation is applied to draw simulated realizations at the random path.														
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
+#install.packages(c('gstat','sp','sp','plyr','fields'))
+#install.packages('plyr')
+library(gstat)                                 # geostatistical methods by Edzer Pebesma
+library(sp)                                    # spatial points addition to regular 
+                                               # data frames
+library(plyr)                                  # manipulating data by Hadley Wickham 
+library(fields)                                # required for the image plots
+
+
+nx = 45                                       # number of cells in the x direction
+ny = 45                                       # number of cells in the y direction
+xsize = 10.0                                   # extent of cells in x direction
+ysize = 10.0                                   # extent of cells in y direction
+
+
+
+xmin = 0
+ymin = 0
+xmax = xmin + nx * xsize
+ymax = ymin + ny * ysize
+x<-seq(xmin,xmax,by=xsize)                     # used for axes on image plots
+y<-seq(ymin,ymax,by=ysize)                    
+
+
+colmap = topo.colors(100)                      # define the color map and 
+                                               # descritation
+
+nscore <- function(x) {                        # by Ashton Shortridge, 2008
+  # Takes a vector of values x and calculates their normal scores. Returns 
+  # a list with the scores and an ordered table of original values and
+  # scores, which is useful as a back-transform table. See backtr().
+  nscore <- qqnorm(x, plot.it = FALSE)$x  # normal score 
+  trn.table <- data.frame(x=sort(x),nscore=sort(nscore))
+  return (list(nscore=nscore, trn.table=trn.table))
+}
+  
+addcoord <- function(nx,xmin,xsize,ny,ymin,ysize) { # Michael Pyrcz, March, 2018                      
+  # makes a 2D dataframe with coordinates based on GSLIB specification
+  coords = matrix(nrow = nx*ny,ncol=2)
+  ixy = 1
+  for(iy in 1:nx) {
+    for(ix in 1:ny) {
+      coords[ixy,1] = xmin + (ix-1)*xsize  
+      coords[ixy,2] = ymin + (iy-1)*ysize 
+      ixy = ixy + 1
+    }
+  }
+  coords.df = data.frame(coords)
+  colnames(coords.df) <- c("X","Y")
+  coordinates(coords.df) =~X+Y
+  return (coords.df)
+}  
+sim2darray <- function(spdataframe,nx,ny,ireal) { # Michael Pyrcz, March, 2018                      
+  # makes a 2D array from realizations spatial point dataframe
+  model = matrix(nrow = nx,ncol = ny)
+  ixy = 1
+  for(iy in 1:ny) {
+    for(ix in 1:nx) {
+      model[ix,iy] = spdataframe@data[ixy,ireal]  
+      ixy = ixy + 1
+    }
+  }
+  return (model)
+}  
+
+
+sim2vector <- function(spdataframe,nx,ny,ireal) { # Michael Pyrcz, March, 2018                      
+  # makes a 1D vector from spatial point dataframe
+  model = rep(0,nx*ny)
+  ixy = 1
+  for(iy in 1:ny) {
+    for(ix in 1:nx) {
+      model[ixy] = spdataframe@data[ixy,ireal]  
+      ixy = ixy + 1
+    }
+  }
+  return (model)
+} 
+
+mydata1=read.csv('Welllocation5SGS_inj.csv')
+
+
+j=1
+cumdata <- matrix(0,nrow = 1500,ncol = 4)
+cumdata <- as.data.frame(cumdata)
+for (i in 1:1){
+  sample <- matrix(data.matrix(mydata1[i,2:9]),nrow = 4,ncol = 2)
+  locdata <- data.frame(rbind(matrix(c(23,23),nrow = 1,ncol = 2),sample))
+  locgrid <- matrix(0,nrow=5,ncol = 2)
+  for (k in 1:5) {
+    locgrid[k,1] <- (locdata[k,1]-1)*xsize + 5
+    locgrid[k,2] <- (locdata[k,2]-1)*ysize + 5 
+  }
+  m <- 500
+  s <- 100
+  location <- log(m^2 / sqrt(s^2 + m^2))
+  shape <- sqrt(log(1 + (s^2 / m^2)))
+  Perm <- matrix(rlnorm(5,location,shape),nrow = 5,ncol = 1)
+  logperm <- log10(Perm)
+  logperm <- matrix(logperm,nrow = 5,ncol = 1)
+  mydata2 <- data.frame(cbind(locgrid,Perm,logperm))
+  z <- i*5
+  cumdata[j:z,1:4] <- mydata2
+  colnames(mydata2) <- c('X','Y','Perm','logperm')
+  #head(mydata2)
+  j=j+5
+}
+
+```
+
+
+For example, for one of the training data set in five-spot pattern, the following permeability (in md) were drawn from the field permeability distribution (Figure \@ref(tab:firsttrainperm)). The X and Y shows spatial coordinates of the production well and injection wells, while the columns three and four provide the permeability value of those points.
+
+```{r firsttrainperm, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+firstobstraining <- data.frame(mydata2)
+knitr::kable(firstobstraining, caption = 'Assigned Permeability 
+             Values for 5 Points of 5-Spot Pattern', booktabs=TRUE)
+```
+
+To visualize the data shown in the Table \@ref(tab:firsttrainperm), the Figure \@ref(fig:5spotplot) shows the spatial locations of the 5 points for calculating SGS. As was mentioned, the X and Y coordinates both has 45 grids with the size of the 10 m, therefore the coordination of the plot in Figure \@ref(fig:5spotplot) will be from 0 to 450 m in both X and Y direction. It must be mentioned that in the all training data-set, we considered the production well is located in the center of geological model, in other word in grid (23,23).
+
+
+```{r 5spotplot, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="Graphical Representation of Five Permeability Points, Shown in the X, Y Coordinates", message=FALSE, warning=FALSE, out.width='80%'}
+
+coordinates(mydata2) = ~X+Y  
+
+npor.trn = nscore(mydata2$logperm)              # normal scores transform
+mydata2[["NPermeability"]]<-npor.trn$nscore     # append the normal scores transform 
+
+cuts = c(2.4,2.45,2.5,2.65,2.7,2.8,2.9)
+cuts.var = c(0.05,.1,.15,.20,.25,.3,.35,.4,.45,.5,.55,.6,.65,.7,.75,.8,.85,.9,.95)
+
+spplot(mydata2, "logperm", do.log = TRUE,      # location map of porosity data
+       key.space=list(x=1.05,y=0.97,corner=c(0,1)),cuts = cuts,
+       scales=list(draw=T),xlab = "X (m)", ylab = "Y (m)",main ="Permeability (Log(K)), 
+       in md")
+
+
+```
+
+
+In this work the parameters of the semivariogram to generate different realization out of SGS method has been depicted in the Table \@ref(tab:semi). Note to mention that the sill considered for nugget effect is the the variance of the 5 permeability points in the Table \@ref(tab:firsttrainperm).
+ 
+```{r semi, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+resdata1 <- data.frame(Parameter=c('Nugget Effect','Type','Range','Anistropy ratio',
+'Azimuth'),Value = c('Sill/2, md^2','Spherical','20 (grid cell)',1 ,'0-degree (North)'))
+knitr::kable(resdata1, caption = 'Parameters of Semi variogram to Perform SGS', 
+             booktabs=TRUE)
+```
+
+Having specified the 5 permeability points and semivariogram parameters the SGS method could be performed. The Figure \@ref(fig:gss) shows the four realizations. In this work, every training observation has 10 permeability realizations.(Note, the range of color-bar at each realization in the Figure \@ref(fig:gss) starts from the minimum of the permeability until maximum of the permeability at THAT realization.)
+
+
+```{r gss, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap='Four Realizations of the Permeability Ditribution Found Using SGS Method', message=FALSE, warning=FALSE, out.width='100%'}
+coords <- addcoord(nx,xmin,xsize,ny,ymin,ysize) # make a dataframe with 
+                                                #all the estimation locations
+#summary(coords)                                 # check the coordinates
+
+sill = var(mydata2$logperm)                    # calculate the variance of the property 
+                                                #of interest as the sill
+min = min(mydata2$logperm)                     # calculate the property min and max 
+                                                #for plotting
+max = max(mydata2$logperm)               
+zlim = c(min,max)            # define the property min and max in a 2x1 vextor
+
+vm.nug1 <- vgm(psill =0.5*sill, "Sph", 200, anis = c(000, 1.0),nugget=0.5*sill)
+condsim.nug1 = krige(logperm~1, mydata2, coords, model = vm.nug1, nmax = 100, nsim = 10)
+
+
+
+
+par(mfrow=c(2,2))
+real1 <- sim2darray(condsim.nug1,nx,ny,1)      # extract realization #1 to a 2D array and plot
+image.plot(10^real1,x=x,y=y,xlab="X(m)",ylab="Y(m)",zlim = c(min(10^real1),max(10^real1)),
+           col=colmap,legend.shrink = 0.6); mtext(line=1, side=3, "Realization #1", outer=F);box(which="plot")
+
+real2 <- sim2darray(condsim.nug1,nx,ny,2)      # extract realization #2 to a 2D array and plot
+image.plot(10^real2,x=x,y=y,xlab="X(m)",ylab="Y(m)",zlim =c(min(10^real2),max(10^real2)) ,
+           col=colmap,legend.shrink = 0.6); mtext(line=1, side=3, "Realization #2", outer=F);box(which="plot")
+
+real3 <- sim2darray(condsim.nug1,nx,ny,3)      # extract realization #3 to a 2D array and plot
+image.plot(10^real3,x=x,y=y,xlab="X(m)",ylab="Y(m)",zlim = c(min(10^real3),max(10^real3)),
+           col=colmap,legend.shrink = 0.6); mtext(line=1, side=3, "Realization #3", outer=F);box(which="plot")
+
+real4 <- sim2darray(condsim.nug1,nx,ny,4)      # extract realization #4 to a 2D array and plot
+image.plot(10^real4,x=x,y=y,xlab="X(m)",ylab="Y(m)",zlim = c(min(10^real4),max(10^real4)),
+           col=colmap,legend.shrink = 0.6); mtext(line=1, side=3, "Realization #4", outer=F);box(which="plot")
+
+```
+
+
+
+### Measure of Connectives
+
+The FMM is a numerical method for the tracking the monotonically advancing surface on a grid based structure. One of the prorogation problem is where the prorogation waves moves in one direction and strictly expands. This boundary values equation is known as Eikonal equation and can be written as:
+
+\begin{equation} 
+  F(x) |\bigtriangledown \tau(x)| = 1
+  (\#eq:binom10)
+\end{equation}
+
+where the $\tau$ is the arrival time , F is speed function. The FMM is introduced by [@sethian1996fast] as numerical method for solving Equinal form of equation.
+The first-order fast-marching formulation to calculate the propagation time in each grid ($\tau_{i,j,k}$) can be summarized as:
+
+
+\begin{equation} 
+  \mu c_t(x) \phi(x) \frac{\partial p(x,t)}{\partial t} -k(x)[\bigtriangledown  ^{2}   p(x,t)]-\bigtriangledown
+k(x).\bigtriangledown p(x,t) = 0
+  (\#eq:binom11)
+\end{equation}
+
+where $p(x)$ is the pressure, $\phi(x)$ is the porosity, $k(x)$ is the permeability, $\mu$ is the viscosity , and $c_t(x)$ is the total compressible (summation of rock and fluid compressibility). Using the Fourier transform , the Equation could be written as:
+
+\begin{equation} 
+  \frac{\mu c_t \phi(x)}{k(x)} i w\hat{p}(x,w) - \frac{\bigtriangledown k(x)}{k       (x)}.\bigtriangledown \hat{p}(x,w) -\bigtriangledown^2\hat{p}(x,w) = 0
+  (\#eq:binom12)
+\end{equation}
+
+Assuming the heterogeneous media the $\frac{\bigtriangledown k(x)}{k (x)}$ is negligible we can write:
+
+\begin{equation}
+  \bigtriangledown^2\hat{p}(x,w) - \frac{1}{\eta (x)} i w\hat{p}(x,w) = 0
+    (\#eq:binom13)
+\end{equation}
+
+Where the term $\eta (x) = \frac{k(x)}{\mu c_t \phi(x)}$ is called diffusivity.
+
+An asympotic solution gives:
+
+\begin{equation} 
+  \hat{p} (x,w) = e^{[-\sqrt{-iw} \tau(x)]} \sum_{n=0}^{\infty} \frac{A_n(x)}{(\sqrt{-iw})^n}
+  (\#eq:binom15)
+\end{equation}
+
+where the $w$ is the frequency, $\tau(x)$ is phase propagation, and $A_n(x)$ is the coefficient of in the expansion.
+The previous equation can be used to calculate the operators:
+
+\begin{equation} 
+  \bigtriangledown\hat{p}(x,w)=e^{[-\sqrt{-iw} \tau(x)]} \sum_{n=0}^{\infty} \frac{1}{(\sqrt{-iw})^n} \times[-\sqrt{-iw} A_n(x) \bigtriangledown \tau(x) +\bigtriangledown A_n(x)]
+    (\#eq:binom16)
+\end{equation}
+
+\begin{equation} 
+  \bigtriangledown^{2}\hat{p}(x,w)=e^{[-\sqrt{-iw} \tau(x)]} \sum_{n=0}^{\infty}           \frac{1}{(\sqrt{-iw})^n} \times[-(\sqrt{-iw})^2 A_n(x) \\
+  \bigtriangledown \tau(x) \bigtriangledown\tau(x) -\sqrt{-iw}\bigtriangledown\tau(x) \\     \bigtriangledown A_n(x)-\sqrt{-iw} A_{n}(x) \bigtriangledown^2\tau(x)-\sqrt{-iw} \\   \tau(x)-\sqrt{-iw}\bigtriangledown A_n(x) \bigtriangledown \tau(x) +\bigtriangledown^2 A_n(x)]
+    (\#eq:binom18)
+\end{equation}
+
+\begin{equation}
+  \bigtriangledown^{2}\hat{p}(x,w)=e^{[-\sqrt{-iw} \tau(x)]}\sum_{n=0}^{\infty} \\           \frac{1}{(\sqrt{-iw})^n} \times[-(\sqrt{-iw})^2 A_n(x) \bigtriangledown \tau(x) \\          
+  (\#eq:binom20)
+\end{equation}
+
+
+Now this equation can be written as:
+
+\begin{equation}
+  e^{[-\sqrt{-iw} \tau(x)]}\sum_{n=0}^{\infty}  \frac{1}{(\sqrt{-iw})^{n-2}} \\              \times[A_{n}(x)\bigtriangledown \tau(x) \bigtriangledown \tau(x) -\frac{1}{\eta (x)} -2 \\    \bigtriangledown \tau(x) \bigtriangledown A_{n-1}(x)
+    (\#eq:binom21)
+\end{equation}
+
+
+one can set zero to the coefficient of the the individual powers of $\sqrt{-iw}$ starting with the highest power $(\sqrt{-iw})^2$, now we can write:
+
+\begin{equation}
+  \bigtriangledown \tau(x) \bigtriangledown \tau(x) -\frac{1}{\eta (x)} = 0
+   (\#eq:binom25)
+\end{equation}
+The above equation has the Eikonal form and relates the $\tau(x)$ we call it diffusive propagation time  to $\eta(x)$ which is the diffusivity coefficient.
+
+\begin{equation}
+  F(x) = \sqrt{\frac{k(x)}{\mu c_t(x) \phi(x) }}
+max(\frac{\tau-\tau_1}{\bigtriangleup x/F_I},0)^2 + max(\frac{\tau-\tau_2}{\bigtriangleup   \\ /F_{J}},0)^2+max(\frac{\tau-\tau_3,}{\bigtriangleup z/F_{K}},0)^2 = 1
+  (\#eq:binom30)
+\end{equation}
+
+
+
+### Analytical Method
+
+Now, in this section the goal is to compare results of the FMM method in tracking the pressure waves with the well known analytical well testing method. Considering the homogeneous reservoirs model with the characteristics depicted in the Table \@ref(tab:tabana), the radius of investigation( Here, the radius of investigation is defined as the the radius, the pressure waves reaches after time (t)).
+
+\begin{equation} 
+  r= \sqrt{\frac{kt}{948 \mu c_t \phi}}
+  (\#eq:binom31)
+\end{equation}
+
+Where t is the time (hours), k is the permeability (md), $\mu$ is the viscosity (cp), $c_t$ is the total compressibility (1/psi), and $\phi$ is the porosity.
+
+The figure plotted in  Figure \@ref(fig:comprap) shows the time pressure arrives at different radius (as contour plot). As could be seen, the FMM methods performs well in the capturing the pressure propagation compared to the exact analytical solution found from concept of the radius of investigation. However, the analytical method developed was valid in the case of the homogeneous reservoir model, whereas the geological model considered in this study is fully heterogeneous, therefore in he rest of this work, the FMM method will be used to calculate the connectivities between each pair point.
+
+```{r tabana, echo=FALSE, tidy=FALSE}
+#install.packages('kableExtra')
+m <- matrix(c('Grid-block Size','Porosity','Permeability','Compressibility','Viscosity','Initial pressure','20 by 20 by 20','10%','1 md','10^-5','1 cp','4000 psi'),nrow = 6,ncol = 2)
+colnames(m) <- c('Parameter','value')
+knitr::kable(m, caption = 'Model Parameters for Radius of Investigation Calculation',booktabs=T)
+```
+
+
+```{r comprap, echo=FALSE,fig.cap="Comparison of Pressure Wave Propogation Profiles, FMM Method vs Analytical Solution"}
+knitr::include_graphics("FMM_WTs.png")
+```
+
+
+
+
+### Features and Response
+
+To utilize the Machine Learning method, we need to define the features of the model and as well response we are looking for. In this work the features of models are:
+
+* Features
+    + Connectivity
+    + Pore Volume Flight
+* Response
+    + NPV
+The connectivity is defined by the value of 'diffusive time of flight' and the PV is the defined as the sum of all grid affected by pressure disturbance when the pressure propagation reach the injection well.
+
+The NPV is defined as the below:
+
+\begin{equation} 
+  NPV=\sum_{k=1}^{n_T} \frac{[q_o^{k}P_o - q_w^k P_w -I^k P_{wi} ]\bigtriangleup t_k}{(1+b)^{t_k/D}}
+    (\#eq:binom33)
+\end{equation}
+
+Where the parameter is defined is below:
+$q_o^{k}$: is the field oil production rate at time k
+$q_w^{k}$: is the field water production rate at time k
+$I^k$: is the field water injection rate at time k
+$P_o$: is the oil price
+$P_wp$: is the water production cost
+$P_wi$: is the water injection cost
+$b$: is the discount factor
+$t-k$: is the cumulative time for discounting
+$D$: is the reference time for discounting (D=365 days if $b$ is expressed as fraction per year and the cash flow is discounted daily)
+$q_o^k$,$q_w^k$ and $I^k$ are forecasted by given production model.
+
+
+In this work, the following economical parameters were considered to calculate the Net Present Value after recessing the Numerical Reservoir Simulator.
+
+
+```{r economic, echo=FALSE, message=FALSE, warning=FALSE}
+#install.packages('kableExtra')
+m <- matrix(c('Oil Price, per barrel', 'Water Production Cost, per barrel','Water Injection Cost, per barrel','Discount Factor','70 $','15$','5$','8%'),nrow = 4,ncol = 2)
+colnames(m) <- c('Parameter','value')
+knitr::kable(m, caption = 'Economic Parameters of the NPV Calculation')
+```
+
+### Machine Learning Algorithm
+
+
+Big data vary in  These call for different approaches. Wide data consists of :
+
+*Thousands/Millions of variables*
+*Hundreds of samples*
+
+Tall data has a dimension in the following range:
+
+*Tens/Hundreds of Variables*
+*Thousands/ Millions of Samples*
+
+In briefly, the most well-known ML algorithm can be summarized as the follows:
+
+* Linear/Logistics Regression
+* k-Nearest Neighbours
+* Support Vector Machine
+* Tree-based Model
+*Decision Tree
+*Random Forest
+*Gradient Boosting Machine
+*Neural Networks
+
+In this work, We use the XGBoost (short for extreme Gradient Boosting) ML model since it has showed several successful application in oil and gas industry and as well is the winning model for several Kaggle competitions [@nwachukwu2018fast, @nwachukwu2019machine].
+
+
+### eXtreme Gradient Boosting Model
+
+suppose we have K trees, the model is defined as:
+
+\begin{equation} 
+  \sum_{k=1}^{K} f_k
+    (\#eq:binom34)
+\end{equation}
+
+
+Where each $f_k$ is the prediction from a decision tree . The model is a collection of decision trees. Having all the decision trees, we make prediction by:
+
+\begin{equation} 
+  \hat{y}_i = \sum_{k=1}^{K}f_k(x_i)
+      (\#eq:binom36)
+\end{equation}
+
+where $x_i$ is the feature vector for the $i-th$ data point. Similarly , the prediction at the$t-th$ step can be defined as:
+
+\begin{equation} 
+  \hat{y}_{i}^{(t)}=\sum_{k=1}^{t} f_k(x_i)
+      (\#eq:binom37)
+\end{equation}
+
+To train the model, the loss function need to be optimized:
+
+* Rooted Mean Square Error for regression
++ $$L = \frac{1}{N}\sum_{i=1}^{N}(y_i - \hat{y}_i)^2$$
+
+* Log- Likelihood  for multi-classification
++ $$ L = -\frac{1}{N}\sum_{i=1}^{N}\sum_{j=1}^{M} y_{i,j} log(p_{i,j})$$
+
+Regularization is another important part of the model. A good regularization term controls the complexity of the model which prevents over- fitting.
+
+\begin{equation} 
+  \Omega = \gamma T + \frac{1}{2} \gamma \sum_{j=1}{T}w_j^2
+      (\#eq:binom40)
+\end{equation}
+
+Where T is the number of the leaves, and $w_j^2$ is the score on the j-th leaf. Putting loss function and regularization together, we have the objective of the model:
+$$Obj = L +\Omega$$
+In the XGBoost method, the gradient descent is used to optimize the objective. Given an objective $Obj(y, \hat{y})$ to optimize, gradient descent is an iterative technique which calculate:
+
+\begin{equation} 
+  \partial_{\hat{y}} Obj(y,\hat{y})
+      (\#eq:binom38)
+\end{equation}
+
+at each iteration.Then we improve $\hat{y}$ along the direction of the gradient to minimize the objective. In the case of iteration, the Objective function $Obj = L+\Omega$ can be defined as :
+
+\begin{equation} 
+  Obj^{(t)}=\sum_{i=1}^{N} L(y_i,\hat{y}_i^{(t)}) +\sum_{i=1}^{t} \Omega(f_i) = \sum_{i=1}^{N}    L(y_i,\hat{y}^{(t-1)} + f_t(x-i))+\sum_{i=1}^{t} \Omega(f_i)
+      (\#eq:binom39)
+\end{equation}
+
+The tree structure in XGBoost leads to the core problem: How we can find a tree that improves the prediction along the gradient?
+The idea of the gradient descent is used to solve this problem.
+
+```{r decxgboost, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Representation of a Decision Tree in XGBOOST"}
+knitr::include_graphics("decisiontreexgb.png")
+```
+
+### Model Building and Validation
+
+In this, 500 training observation were used to build the ML model. Each training observation then has 10 realizations that make total training data set equal to 5000. The features of this model has been shown in the table.
+
+```{r connet, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+resdata <- data.frame(Parameter=c('Connectivity Pair (Inj1-Inj2)','Connectivity Pair (Inj3-Inj1)',
+                                  'Connectivity Pair (Inj3-Inj2)','Connectivity Pair (Inj4-Inj1)',
+                                  'Connectivity Pair (Inj4-Inj2)','Connectivity Pair (Inj4-Inj3)',
+                                  'Connectivity Pair (Pro1-Inj1)','Connectivity Pair (Pro1-Inj2)',
+                                  'Connectivity Pair (Pro1-Inj3)','Connectivity Pair (Pro1-Inj4)',
+                                  'PV of Flight'))
+knitr::kable(resdata, caption = 'Connectivity Network as the Feature of the ML', booktabs=TRUE)
+```
+
+Then, the Table \@ref(tab:connet) provides the features that carries the information about the geology and pressure propagation in the reservoir model, not the injection rate parameters. To include the injection scenarios, the exponential form of injection scenario was considered, as the follow:
+
+\begin{equation} 
+  A*exp(-\gamma*t)
+        (\#eq:binom48)
+\end{equation}
+
+Here, we consider the 5 different $A$ values as the starting injection rates and 11 $\gamma$. Therefore, the total injection scenario included in this work is ($5*11=55$). In the Figure \@ref(fig:injec) we can see the 55 injection scenarios having 11 values for $\gamma$ (left side of the Figure) and Showing all scenarios (Right side of the figure).
+
+```{r injec, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="Left: 11 Injection Scenarios at A=100, Right: All Injection Schemes", message=FALSE, warning=FALSE, out.width='100%'}
+knitr::include_graphics("inj1.png")
+```
+
+
+Now, specifying each injection scenarios based on it's $A$ and $\gamma$ values, we can theses features to our initial features, to complete the features which captures both the physic of the flow and the control parameters. 
+
+```{r connetinj, echo=FALSE, message=FALSE, warning=FALSE, tidy=FALSE}
+resdata <- data.frame(Features=c('Connectivity Pair (Inj1-Inj2)','Connectivity Pair (Inj3-Inj1)',
+                                 'Connectivity Pair (Inj3-Inj2)','Connectivity Pair (Inj4-Inj1)',
+                                 'Connectivity Pair (Inj4-Inj2)','Connectivity Pair (Inj4-Inj3)',
+                                 'Connectivity Pair (Pro1-Inj1)','Connectivity Pair (Pro1-Inj2)',
+                                 'Connectivity Pair (Pro1-Inj3)','Connectivity Pair (Pro1-Inj4)',
+                                 'PV of Flight','A value for Inje1','A value for Inj2','A value for Inj3',
+                                 'A value for Inj4', 'Gamma value for Inj1','Gamma value for Inj2','Gamma value for Inj3',
+                                 'Gamma value for Inj4'))
+knitr::kable(resdata, caption = 'Connectivity Network as the Feature of the ML + Control Parameters for Injection Rates', booktabs=TRUE)
+```
+
+Now, the full sets of the features shown in the Table \@ref(tab:connetinj) and the output of the ML (NPV) is ready. The number of training data set is (N=5000) and the algorithm of ML is XGBOOST. The ML algorithm here has six parameter that needed to be tuned. Therefore, hyper parameter optimization process was doe considering 288 combination of the parameters to fund the tuned parameters of the ML. It must be mentioned that, in this work 5-fold Cross- validation was used to avoid any potential over-fitting problem in the development of the ML. The final parameters of the ML in this work can be shown in the Figure \@ref(tab:parameter)
+
+```{r parameter, echo=FALSE, message=FALSE, warning=FALSE}
+#install.packages('kableExtra')
+m <- matrix(c('nrounds', 'Max_depth','Etta','Gamma','Min_Child_Weight',
+              'Sub-sample',4000,6,0.001,0,2.25,1),nrow = 6,ncol = 2)
+colnames(m) <- c('XGBOOST Parameter','Value')
+knitr::kable(m, caption = 'Tuned Parameters of the XGBOOT Model')
+```
+
+```{r mlresult, echo=FALSE, fig.align='center', fig.asp=.75, fig.cap="An Example of a Training Data Set and Testing Model Capability", message=FALSE, warning=FALSE, out.width='100%'}
+knitr::include_graphics("mlresult.png")
+
+```
+
+
+
+
+*** 
+[^1] Here, we call proxy reservoir model because it is less rich in complexity and in addition is not fully based on solving  governing physical equations, rather model reduced form of the physical models. 
+[^2]: In this work training observation means the same geological model which has the different well locations and injection scenarios.
+[^3]: The realization in this work means the same well placement and and injection rates but different permeability distribution to capture the uncertainty of this petrophysical parameter.
